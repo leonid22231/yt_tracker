@@ -1,0 +1,21 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# Секреты
+.env
+
+# FVM — SDK кэшируется локально, в git только .fvmrc
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Flutter platforms (генерируются локально)
+**/flutter/ephemeral/
+
+# FVM Version Cache
+.fvm/

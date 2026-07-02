@@ -4,6 +4,7 @@ import 'package:youtrack_timer/agent/cursor_agent_client.dart';
 import 'package:youtrack_timer/logging/app_log.dart';
 import 'package:youtrack_timer/models/issue.dart';
 import 'package:youtrack_timer/models/issue_context.dart';
+import 'package:youtrack_timer/models/loading_progress.dart';
 import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/utils/date_utils.dart';
@@ -156,17 +157,18 @@ class AiTimeEstimator {
       );
     }
     if (meetup.isConfigured) {
-      final from = meetup.startDate != null
-          ? DateUtils.formatForQuery(meetup.startDate!)
-          : 'начала периода';
-      final to = meetup.endDate != null
-          ? DateUtils.formatForQuery(meetup.endDate!)
-          : 'конца периода';
-      promptParts.add(
-        'Митап: ${meetup.issueIdReadable} — целевой итог ${meetup.minutesPerDay} мин/день '
-        '(включая уже списанное в YT; в estimates только дополнение) '
-        'на каждый рабочий день $from — $to',
-      );
+      final meetupExcluded = meetup.normalizedExcludedDates
+          .map(DateUtils.formatForQuery)
+          .toList()
+        ..sort();
+      var meetupLine =
+          'Митап: ${meetup.issueIdReadable} — целевой итог ${meetup.minutesPerDay} мин/день '
+          '(включая уже списанное в YT; в estimates только дополнение) '
+          'на каждый рабочий день периода';
+      if (meetupExcluded.isNotEmpty) {
+        meetupLine += ', кроме дат митапа: ${meetupExcluded.join(', ')}';
+      }
+      promptParts.add(meetupLine);
     }
     final prompt =
         '${promptParts.join('\n')}\n\nДанные:\n${jsonEncode(payload)}';
@@ -352,6 +354,8 @@ Future<List<IssueContext>> buildIssueContexts({
   required List<YouTrackIssue> issues,
   required DateTime start,
   required DateTime end,
+  LoadingProgressTracker? progress,
+  String? progressLabel,
 }) async {
   final startDay = DateUtils.dateOnly(start);
   final endDay = DateUtils.dateOnly(end);
@@ -359,7 +363,17 @@ Future<List<IssueContext>> buildIssueContexts({
   await client.currentUser();
 
   final contexts = <IssueContext>[];
-  for (final issue in issues) {
+  final total = issues.length;
+  for (var i = 0; i < issues.length; i++) {
+    final issue = issues[i];
+    if (progress != null && total > 0) {
+      progress.fraction(
+        (i + 1) / total,
+        detail: progressLabel != null
+            ? '$progressLabel · ${issue.idReadable} (${i + 1}/$total)'
+            : '${issue.idReadable} (${i + 1}/$total)',
+      );
+    }
     final activities = await client.fetchActivities(
       issue.id,
       start: start,

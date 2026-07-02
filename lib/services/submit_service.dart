@@ -1,4 +1,5 @@
 import 'package:youtrack_timer/logging/app_log.dart';
+import 'package:youtrack_timer/models/loading_progress.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/models/work_item.dart';
 import 'package:youtrack_timer/services/submit_guard.dart';
@@ -16,6 +17,7 @@ class SubmitService {
   Future<SubmitResult> preview({
     required List<PlannedEntry> entries,
     bool checkDuplicates = true,
+    LoadingProgressTracker? progress,
   }) async {
     SubmitGuard.ensurePreviewOnly(previewMode: true);
     final log = AppLog.instance;
@@ -33,8 +35,14 @@ class SubmitService {
     );
 
     final cache = <String, List<YouTrackWorkItem>>{};
+    progress?.start('Проверка дубликатов', detail: '${entries.length} записей');
 
-    for (final entry in entries) {
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      progress?.fraction(
+        (i + 1) / entries.length,
+        detail: '${entry.issue.idReadable} (${i + 1}/${entries.length})',
+      );
       var duplicate = false;
 
       if (checkDuplicates) {
@@ -80,6 +88,7 @@ class SubmitService {
   /// Проверка с детализацией: какие записи будут пропущены как дубликаты.
   Future<PreviewDetailResult> previewDetailed({
     required List<PlannedEntry> entries,
+    LoadingProgressTracker? progress,
   }) async {
     SubmitGuard.ensurePreviewOnly(previewMode: true);
     final log = AppLog.instance;
@@ -95,8 +104,14 @@ class SubmitService {
     }
 
     final cache = <String, List<YouTrackWorkItem>>{};
+    progress?.start('Проверка дубликатов', detail: '${entries.length} записей');
 
-    for (final entry in entries) {
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      progress?.fraction(
+        (i + 1) / entries.length,
+        detail: '${entry.issue.idReadable} (${i + 1}/${entries.length})',
+      );
       final key =
           '${entry.issue.idReadable}|${DateUtils.formatForQuery(entry.date)}';
       var duplicate = false;
@@ -138,6 +153,7 @@ class SubmitService {
     required List<PlannedEntry> entries,
     required bool dryRunEnabled,
     required bool userConfirmed,
+    LoadingProgressTracker? progress,
   }) async {
     SubmitGuard.ensureWriteAllowed(
       dryRunEnabled: dryRunEnabled,
@@ -160,8 +176,14 @@ class SubmitService {
     );
 
     final cache = <String, List<YouTrackWorkItem>>{};
+    progress?.start('Запись в YouTrack', detail: '${entries.length} записей');
 
-    for (final entry in entries) {
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      progress?.fraction(
+        (i + 1) / entries.length,
+        detail: '${entry.issue.idReadable} (${i + 1}/${entries.length})',
+      );
       final issueId = entry.issue.id;
       if (!cache.containsKey(issueId)) {
         cache[issueId] = await _client.fetchWorkItems(issueId);

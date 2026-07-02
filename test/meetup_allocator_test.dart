@@ -6,6 +6,7 @@ import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/models/work_item.dart';
 import 'package:youtrack_timer/services/day_plan_capper.dart';
+import 'package:youtrack_timer/utils/date_utils.dart';
 import 'package:youtrack_timer/services/meetup_allocator.dart';
 
 YouTrackIssue _issue(String id, String readable) => YouTrackIssue(
@@ -70,6 +71,32 @@ void main() {
     );
 
     expect(result.where((e) => e.issue.id == '1'), isEmpty);
+  });
+
+  test('MeetupAllocator пропускает дни из исключений митапа', () {
+    final issue = _issue('1', 'MTG-1');
+    final day = DateTime(2024, 6, 10);
+    final excluded = DateTime(2024, 6, 11);
+
+    final result = MeetupAllocator.apply(
+      entries: const [],
+      meetup: MeetupSettings(
+        enabled: true,
+        issueIdReadable: 'MTG-1',
+        minutesPerDay: 60,
+        excludedDates: {excluded},
+      ),
+      options: const PlanCalculationOptions(),
+      periodStart: day,
+      periodEnd: excluded,
+      issues: [issue],
+    );
+
+    expect(result.where((e) => e.issue.id == '1').length, 1);
+    expect(
+      result.any((e) => DateUtils.isSameDay(e.date, excluded)),
+      isFalse,
+    );
   });
 
   test('DayPlanCapper ограничивает сумму дня', () {

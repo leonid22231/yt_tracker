@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/utils/app_date_picker.dart';
 
 /// Выбор периода «с — по».
 class PeriodSelector extends StatelessWidget {
@@ -49,19 +50,11 @@ class PeriodSelector extends StatelessWidget {
     final initial = isStart
         ? (start ?? DateTime.now())
         : (end ?? start ?? DateTime.now());
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showAppDatePicker(
+      context,
       initialDate: initial,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: AppColors.primary,
-              ),
-        ),
-        child: child!,
-      ),
     );
     if (picked == null) return;
 

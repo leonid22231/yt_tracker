@@ -7,6 +7,7 @@ import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/services/ai_time_estimator.dart';
 import 'package:youtrack_timer/services/day_gap_filler.dart';
 import 'package:youtrack_timer/services/day_timeline_builder.dart';
+import 'package:youtrack_timer/models/loading_progress.dart';
 import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/services/day_plan_capper.dart';
 import 'package:youtrack_timer/services/meetup_allocator.dart';
@@ -44,12 +45,15 @@ class PlanBuilderService {
     required bool useAi,
     int? minutesPerWorkDay,
     PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
+    LoadingProgressTracker? progress,
   }) async {
     final dayMinutes = minutesPerWorkDay ?? _minutesPerWorkDay;
     final log = AppLog.instance;
+    progress?.advance('Загрузка задач из YouTrack');
     log.info(LogCategory.plan, 'Загрузка задач из YouTrack…');
     var planIssues = await loadIssues(start, end);
     if (planIssues.isEmpty) {
+      progress?.advance('Поиск задач по вашим списаниям');
       log.warn(
         LogCategory.plan,
         'Нет задач assignee: me — пробуем только ваше списанное время…',
@@ -75,10 +79,15 @@ class PlanBuilderService {
       );
     }
 
+    progress?.advance(
+      'Загрузка истории и списаний',
+      detail: '${planIssues.length} задач',
+    );
     final data = await _loadContexts(
       planIssues: planIssues,
       start: start,
       end: end,
+      progress: progress,
     );
     final planContexts = data.planContexts;
     final allContexts = data.allContexts;
@@ -95,6 +104,7 @@ class PlanBuilderService {
 
     if (useAi && _cursor != null) {
       try {
+        progress?.advance('Оценка времени через Cursor AI');
         final activityCount =
             planContexts.fold<int>(0, (s, c) => s + c.activities.length);
         final existingMin = allContexts.fold<int>(
@@ -132,14 +142,17 @@ class PlanBuilderService {
       } catch (e) {
         log.warn(LogCategory.cursor, 'AI недоступен, равномерное распределение');
         log.debug(LogCategory.cursor, '$e');
+        progress?.advance('Равномерное распределение времени');
         entries = _entriesFromEven(planIssues, start, end, calculationOptions);
       }
     } else {
+      progress?.advance('Равномерное распределение времени');
       log.info(LogCategory.plan, 'Равномерное распределение…');
       entries = _entriesFromEven(planIssues, start, end, calculationOptions);
     }
 
     final snapshot = List<PlannedEntry>.from(entries);
+    progress?.advance('Финализация плана (митап, лимиты)');
     entries = _finalizeEntries(
       entries,
       planIssues,
@@ -150,6 +163,7 @@ class PlanBuilderService {
       calculationOptions,
     );
 
+    progress?.advance('Построение таймлайнов по дням');
     final timelines = await _buildDayTimelines(
       timelineContexts: allContexts,
       entries: entries,
@@ -179,9 +193,11 @@ class PlanBuilderService {
     required int minutesPerWorkDay,
     Set<String> excludedIssueIds = const {},
     PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
+    LoadingProgressTracker? progress,
   }) async {
     final log = AppLog.instance;
 
+    progress?.advance('Загрузка задач и списаний');
     log.info(LogCategory.plan, 'Пересчёт: загрузка задач и списанного времени…');
     final issues = await loadIssues(start, end);
     if (issues.isEmpty) {
@@ -193,6 +209,7 @@ class PlanBuilderService {
       planIssues: issues,
       start: start,
       end: end,
+      progress: progress,
     );
     final excluded = excludedIssueIds;
     final activeIssues =
@@ -217,6 +234,7 @@ class PlanBuilderService {
     final cursor = _cursor;
     if (cursor != null) {
       try {
+        progress?.advance('Пересчёт через Cursor AI');
         log.info(LogCategory.cursor, 'Пересчёт через Cursor Agent…');
         final estimator = AiTimeEstimator(cursor);
         final weights = (current.baselineEntries.isNotEmpty
@@ -250,6 +268,7 @@ class PlanBuilderService {
       } catch (e) {
         log.warn(LogCategory.cursor, 'AI-пересчёт недоступен, локальный пересчёт');
         log.debug(LogCategory.cursor, '$e');
+        progress?.advance('Локальный пересчёт плана');
         entries = _fallbackRecalculate(
           current: current,
           start: start,
@@ -261,6 +280,7 @@ class PlanBuilderService {
         );
       }
     } else {
+      progress?.advance('Локальный пересчёт плана');
       entries = _fallbackRecalculate(
         current: current,
         start: start,
@@ -272,6 +292,7 @@ class PlanBuilderService {
       );
     }
 
+    progress?.advance('Финализация плана');
     entries = _finalizeEntries(
       entries,
       activeIssues,
@@ -287,6 +308,7 @@ class PlanBuilderService {
         'После добивки дней: ${entries.length} записей в плане',
       );
     }
+    progress?.advance('Построение таймлайнов');
     final timelines = await _buildDayTimelines(
       timelineContexts: allContexts,
       entries: entries,
@@ -312,6 +334,7 @@ class PlanBuilderService {
     required List<YouTrackIssue> planIssues,
     required DateTime start,
     required DateTime end,
+    LoadingProgressTracker? progress,
   }) async {
     final extraIssues = await _youTrack.fetchMyWorkTimelineIssues(
       startDate: start,
@@ -325,12 +348,15 @@ class PlanBuilderService {
       issues: planIssues,
       start: start,
       end: end,
+      progress: progress,
     );
     final allContexts = await buildIssueContexts(
       client: _youTrack,
       issues: allIssues,
       start: start,
       end: end,
+      progress: progress,
+      progressLabel: 'Доп. задачи для таймлайна',
     );
 
     return (planContexts: planContexts, allContexts: allContexts);

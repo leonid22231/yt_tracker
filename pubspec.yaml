@@ -4,12 +4,16 @@ version: 1.0.0
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: '>=3.11.0 <3.13.0'
+  flutter: '>=3.41.2'
 
 dependencies:
   args: ^2.6.0
   dotenv: ^4.2.0
+  fl_chart: ^0.70.2
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   flutter_riverpod: ^2.6.1
   google_fonts: ^6.2.1

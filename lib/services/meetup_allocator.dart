@@ -27,14 +27,11 @@ class MeetupAllocator {
         );
     if (issue == null) return entries;
 
-    final rangeStart = DateUtils.dateOnly(meetup.startDate ?? periodStart);
-    final rangeEnd = DateUtils.dateOnly(meetup.endDate ?? periodEnd);
     final workingDays = options.workingDays(periodStart, periodEnd);
 
     final result = List<PlannedEntry>.from(entries);
     for (final day in workingDays) {
-      final dayOnly = DateUtils.dateOnly(day);
-      if (dayOnly.isBefore(rangeStart) || dayOnly.isAfter(rangeEnd)) continue;
+      if (meetup.isDayExcluded(day)) continue;
 
       final existing = _existingMinutesOnDay(
         existingContexts,

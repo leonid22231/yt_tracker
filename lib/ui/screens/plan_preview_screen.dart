@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:youtrack_timer/config/app_config.dart';
+import 'package:youtrack_timer/models/loading_progress.dart';
 import 'package:youtrack_timer/models/plan_preview_entry.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
@@ -10,6 +11,7 @@ import 'package:youtrack_timer/services/plan_builder_service.dart';
 import 'package:youtrack_timer/services/plan_preview_builder.dart';
 import 'package:youtrack_timer/services/submit_service.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/widgets/loading_progress_view.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
 import 'package:youtrack_timer/ui/widgets/preview/youtrack_calendar_cell.dart';
 import 'package:youtrack_timer/ui/widgets/preview/youtrack_calendar_grid.dart';
@@ -40,6 +42,7 @@ class PlanPreviewScreen extends ConsumerStatefulWidget {
 
 class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
   var _loading = true;
+  LoadingProgress? _progress;
   String? _error;
   SubmitResult? _result;
   List<PlanPreviewDay> _days = [];
@@ -52,6 +55,18 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
   }
 
   Future<void> _runCheck() async {
+    final tracker = LoadingProgressTracker(
+      operation: 'Проверка плана',
+      totalSteps: 1,
+      onProgress: (p) {
+        if (mounted) setState(() => _progress = p);
+      },
+    );
+    tracker.start(
+      'Проверка дубликатов в YouTrack',
+      detail: '${widget.entries.length} записей',
+    );
+
     setState(() {
       _loading = true;
       _error = null;
@@ -75,6 +90,7 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
       final client = YouTrackClient(config);
       final detailed = await SubmitService(client).previewDetailed(
         entries: widget.entries,
+        progress: tracker,
       );
       client.close();
 
@@ -95,6 +111,7 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
         _days = days;
         _weekRows = PlanPreviewBuilder.buildWeekRows(days);
         _loading = false;
+        _progress = null;
       });
 
     } catch (e) {
@@ -102,6 +119,7 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
       setState(() {
         _error = '$e';
         _loading = false;
+        _progress = null;
         _days = PlanPreviewBuilder.buildDays(
           plan: widget.plan,
           entriesToCheck: widget.entries,
@@ -255,16 +273,7 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
             onPressed: () => Navigator.pop(context),
           ),
           actions: [
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else
+            if (!_loading)
               IconButton(
                 tooltip: 'Обновить проверку',
                 onPressed: _runCheck,
@@ -275,6 +284,14 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_loading && _progress != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: LoadingProgressView(
+                  progress: _progress,
+                  layout: LoadingProgressLayout.panel,
+                ),
+              ),
             _SummaryBar(
               period: period,
               loading: _loading,
@@ -355,7 +372,7 @@ class _SummaryBar extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           if (loading)
-            const Text('Проверка дубликатов в YouTrack…')
+            const Text('Проверка…')
           else if (error != null)
             Text(error!, style: const TextStyle(color: AppColors.warning))
           else if (result != null)

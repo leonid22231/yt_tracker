@@ -8,6 +8,7 @@ import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/services/day_timeline_builder.dart';
 import 'package:youtrack_timer/services/plan_builder_service.dart';
 import 'package:youtrack_timer/models/meetup_settings.dart';
+import 'package:youtrack_timer/models/loading_progress.dart';
 import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/utils/date_utils.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
@@ -46,6 +47,7 @@ class HomeState {
   HomeState({
     this.isLoading = false,
     this.statusMessage = '',
+    this.loadingProgress,
     this.plan,
     this.startDate,
     this.endDate,
@@ -59,6 +61,7 @@ class HomeState {
 
   final bool isLoading;
   final String statusMessage;
+  final LoadingProgress? loadingProgress;
   final PlanBuildResult? plan;
   final DateTime? startDate;
   final DateTime? endDate;
@@ -99,6 +102,8 @@ class HomeState {
   HomeState copyWith({
     bool? isLoading,
     String? statusMessage,
+    LoadingProgress? loadingProgress,
+    bool clearLoadingProgress = false,
     PlanBuildResult? plan,
     DateTime? startDate,
     DateTime? endDate,
@@ -112,6 +117,9 @@ class HomeState {
       HomeState(
         isLoading: isLoading ?? this.isLoading,
         statusMessage: statusMessage ?? this.statusMessage,
+        loadingProgress: clearLoadingProgress
+            ? null
+            : (loadingProgress ?? this.loadingProgress),
         plan: plan ?? this.plan,
         startDate: startDate ?? this.startDate,
         endDate: endDate ?? this.endDate,
@@ -138,6 +146,32 @@ class HomeNotifier extends StateNotifier<HomeState> {
   Timer? _recalcDebounce;
   int _recalcGeneration = 0;
 
+  void _onProgress(LoadingProgress progress) {
+    if (!mounted) return;
+    state = state.copyWith(
+      isLoading: true,
+      loadingProgress: progress,
+      statusMessage: progress.stepLabel,
+    );
+  }
+
+  LoadingProgressTracker _tracker(String operation, int totalSteps) {
+    return LoadingProgressTracker(
+      operation: operation,
+      totalSteps: totalSteps,
+      onProgress: _onProgress,
+    );
+  }
+
+  void _finishLoading({String? statusMessage}) {
+    if (!mounted) return;
+    state = state.copyWith(
+      isLoading: false,
+      clearLoadingProgress: true,
+      statusMessage: statusMessage ?? state.statusMessage,
+    );
+  }
+
   Future<void> buildPlan() async {
     final settings = _ref.read(settingsProvider).valueOrNull;
     if (settings == null || !settings.hasYouTrack) {
@@ -147,7 +181,8 @@ class HomeNotifier extends StateNotifier<HomeState> {
 
     _log.clear();
     _log.info(LogCategory.plan, 'Построение плана…');
-    state = state.copyWith(isLoading: true, statusMessage: 'Старт…');
+    final tracker = _tracker('Построение плана', 7);
+    tracker.start('Подключение к YouTrack');
 
     try {
       final normalized = settings.normalized();
@@ -191,6 +226,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
         end: state.endDate!,
         useAi: settings.useAi,
         calculationOptions: state.calculationOptions,
+        progress: tracker,
       );
 
       cursorClient?.close();
@@ -207,16 +243,17 @@ class HomeNotifier extends StateNotifier<HomeState> {
 
       state = state.copyWith(
         isLoading: false,
+        clearLoadingProgress: true,
         plan: result,
         statusMessage: summary,
         excludedIssueIds: {},
       );
     } on YouTrackApiException catch (e, st) {
       _log.error(LogCategory.youtrack, e.message, e, st);
-      state = state.copyWith(isLoading: false, statusMessage: 'Ошибка YouTrack');
+      _finishLoading(statusMessage: 'Ошибка YouTrack');
     } catch (e, st) {
       _log.error(LogCategory.plan, 'Сбой построения плана', e, st);
-      state = state.copyWith(isLoading: false, statusMessage: 'Ошибка');
+      _finishLoading(statusMessage: 'Ошибка');
     }
   }
 
@@ -232,24 +269,25 @@ class HomeNotifier extends StateNotifier<HomeState> {
       return;
     }
     _log.info(LogCategory.submit, 'Проверка ${entries.length} записей…');
-    state = state.copyWith(isLoading: true, statusMessage: 'Проверка (без записи)…');
+    final tracker = _tracker('Проверка плана', 1);
+    tracker.start('Проверка дубликатов', detail: '${entries.length} записей');
 
     try {
       final client = YouTrackClient(ctx.config);
       final result = await SubmitService(client).preview(
         entries: entries,
+        progress: tracker,
       );
       client.close();
 
-      state = state.copyWith(
-        isLoading: false,
+      _finishLoading(
         statusMessage:
             'Проверка: записалось бы ${result.created}, '
             'пропуск ${result.skipped}',
       );
     } catch (e, st) {
       _log.error(LogCategory.submit, 'Ошибка проверки', e, st);
-      state = state.copyWith(isLoading: false, statusMessage: 'Ошибка проверки');
+      _finishLoading(statusMessage: 'Ошибка проверки');
     }
   }
 
@@ -276,7 +314,8 @@ class HomeNotifier extends StateNotifier<HomeState> {
 
     final entries = state.activeEntries;
     _log.warn(LogCategory.submit, 'Старт записи в YouTrack…');
-    state = state.copyWith(isLoading: true, statusMessage: 'Запись в YouTrack…');
+    final tracker = _tracker('Запись в YouTrack', 1);
+    tracker.start('Запись work items', detail: '${entries.length} записей');
 
     try {
       SubmitGuard.ensureWriteAllowed(
@@ -289,6 +328,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
         entries: entries,
         dryRunEnabled: ctx.settings.dryRun,
         userConfirmed: userConfirmed,
+        progress: tracker,
       );
       client.close();
 
@@ -297,16 +337,13 @@ class HomeNotifier extends StateNotifier<HomeState> {
         'Запись завершена: ${result.created} создано, '
         '${result.skipped} пропущено, ${result.failed} ошибок',
       );
-      state = state.copyWith(
-        isLoading: false,
-        statusMessage: 'Записано в YouTrack: ${result.created}',
-      );
+      _finishLoading(statusMessage: 'Записано в YouTrack: ${result.created}');
     } on SubmitGuardException catch (e) {
       _log.warn(LogCategory.submit, e.message);
-      state = state.copyWith(isLoading: false, statusMessage: 'Запись заблокирована');
+      _finishLoading(statusMessage: 'Запись заблокирована');
     } catch (e, st) {
       _log.error(LogCategory.submit, 'Ошибка записи', e, st);
-      state = state.copyWith(isLoading: false, statusMessage: 'Ошибка записи');
+      _finishLoading(statusMessage: 'Ошибка записи');
     }
   }
 
@@ -393,6 +430,22 @@ class HomeNotifier extends StateNotifier<HomeState> {
   void setMeetupSettings(MeetupSettings settings, {bool scheduleRecalc = true}) {
     state = state.copyWith(meetupSettings: settings);
     if (scheduleRecalc && state.plan != null) _scheduleRecalculate();
+  }
+
+  void addMeetupExcludedDate(DateTime date) {
+    final normalized = DateUtils.dateOnly(date);
+    final meetup = state.meetupSettings;
+    if (meetup.excludedDates.contains(normalized)) return;
+    final updated = Set<DateTime>.from(meetup.excludedDates)..add(normalized);
+    setMeetupSettings(meetup.copyWith(excludedDates: updated));
+  }
+
+  void removeMeetupExcludedDate(DateTime date) {
+    final normalized = DateUtils.dateOnly(date);
+    final meetup = state.meetupSettings;
+    if (!meetup.excludedDates.contains(normalized)) return;
+    final updated = Set<DateTime>.from(meetup.excludedDates)..remove(normalized);
+    setMeetupSettings(meetup.copyWith(excludedDates: updated));
   }
 
   void setHoursPerWorkDay(double hours, {bool scheduleRecalc = false}) {
@@ -551,10 +604,8 @@ class HomeNotifier extends StateNotifier<HomeState> {
     }
 
     final generation = ++_recalcGeneration;
-    state = state.copyWith(
-      isLoading: true,
-      statusMessage: 'Пересчёт через Cursor Agent…',
-    );
+    final tracker = _tracker('Пересчёт плана', 6);
+    tracker.start('Подготовка пересчёта');
 
     try {
       final normalized = settings.normalized();
@@ -591,6 +642,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
         minutesPerWorkDay: state.minutesPerWorkDay,
         excludedIssueIds: state.excludedIssueIds,
         calculationOptions: state.calculationOptions,
+        progress: tracker,
       );
 
       cursorClient?.close();
@@ -609,6 +661,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
       final filtered = _applyExclusions(updated);
       state = state.copyWith(
         isLoading: false,
+        clearLoadingProgress: true,
         plan: filtered,
         statusMessage: viaAi
             ? 'Пересчёт AI: ${filtered.entries.length} записей'
@@ -617,17 +670,11 @@ class HomeNotifier extends StateNotifier<HomeState> {
     } on YouTrackApiException catch (e, st) {
       if (generation != _recalcGeneration) return;
       _log.error(LogCategory.youtrack, e.message, e, st);
-      state = state.copyWith(
-        isLoading: false,
-        statusMessage: 'Ошибка пересчёта (YouTrack)',
-      );
+      _finishLoading(statusMessage: 'Ошибка пересчёта (YouTrack)');
     } catch (e, st) {
       if (generation != _recalcGeneration) return;
       _log.error(LogCategory.plan, 'Ошибка пересчёта', e, st);
-      state = state.copyWith(
-        isLoading: false,
-        statusMessage: 'Ошибка пересчёта',
-      );
+      _finishLoading(statusMessage: 'Ошибка пересчёта');
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/meetup_settings.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/utils/app_date_picker.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
 import 'package:youtrack_timer/utils/date_utils.dart' as yt_date;
 
@@ -45,9 +46,11 @@ class _MeetupSettingsControlState extends ConsumerState<MeetupSettingsControl> {
   Widget build(BuildContext context) {
     final home = ref.watch(homeProvider);
     final meetup = home.meetupSettings;
+    final notifier = ref.read(homeProvider.notifier);
     final hours = meetup.minutesPerDay / 60;
     final display = _dragging ? _localHours! : hours;
     final fmt = DateFormat('d MMM', 'ru');
+    final excluded = meetup.excludedDates.toList()..sort((a, b) => a.compareTo(b));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -142,31 +145,53 @@ class _MeetupSettingsControlState extends ConsumerState<MeetupSettingsControl> {
           ),
           Row(
             children: [
-              Expanded(
-                child: _RangeChip(
-                  label: 'С',
-                  value: meetup.startDate != null
-                      ? fmt.format(meetup.startDate!)
-                      : 'начала',
-                  onTap: home.isLoading
-                      ? null
-                      : () => _pickRangeDate(isStart: true),
+              const Expanded(
+                child: Text(
+                  'Без митапа',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _RangeChip(
-                  label: 'По',
-                  value: meetup.endDate != null
-                      ? fmt.format(meetup.endDate!)
-                      : 'конца',
-                  onTap: home.isLoading
-                      ? null
-                      : () => _pickRangeDate(isStart: false),
+              TextButton.icon(
+                onPressed: home.isLoading ||
+                        home.startDate == null ||
+                        home.endDate == null
+                    ? null
+                    : () => _pickExcludedDate(context),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Добавить'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  textStyle: const TextStyle(fontSize: 11),
                 ),
               ),
             ],
           ),
+          if (excluded.isEmpty)
+            const Text(
+              'Напр. отпуск на митап, но работа по задачам остаётся',
+              style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+            )
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final d in excluded)
+                  InputChip(
+                    label: Text(fmt.format(d)),
+                    deleteIcon: const Icon(Icons.close, size: 14),
+                    onDeleted: home.isLoading
+                        ? null
+                        : () => notifier.removeMeetupExcludedDate(d),
+                    visualDensity: VisualDensity.compact,
+                    labelStyle: const TextStyle(fontSize: 11),
+                  ),
+              ],
+            ),
           const SizedBox(height: 4),
           const Text(
             'Целевое время в день (с учётом уже списанного в YT)',
@@ -177,95 +202,25 @@ class _MeetupSettingsControlState extends ConsumerState<MeetupSettingsControl> {
     );
   }
 
-  Future<void> _pickRangeDate({required bool isStart}) async {
+  Future<void> _pickExcludedDate(BuildContext context) async {
     final home = ref.read(homeProvider);
-    if (home.startDate == null || home.endDate == null) return;
-    final meetup = home.meetupSettings;
+    final start = home.startDate!;
+    final end = home.endDate!;
 
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: isStart
-          ? (meetup.startDate ?? home.startDate!)
-          : (meetup.endDate ?? home.endDate!),
-      firstDate: home.startDate!,
-      lastDate: home.endDate!,
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: AppColors.primary,
-              ),
-        ),
-        child: child!,
-      ),
+    final picked = await showAppDatePicker(
+      context,
+      initialDate: start,
+      firstDate: start,
+      lastDate: end,
+      selectableDayPredicate: (day) {
+        final only = yt_date.DateUtils.dateOnly(day);
+        return !only.isBefore(yt_date.DateUtils.dateOnly(start)) &&
+            !only.isAfter(yt_date.DateUtils.dateOnly(end)) &&
+            day.weekday >= DateTime.monday &&
+            day.weekday <= DateTime.friday;
+      },
     );
     if (picked == null) return;
-
-    final only = yt_date.DateUtils.dateOnly(picked);
-    if (isStart) {
-      _apply(
-        meetup.copyWith(
-          startDate: only,
-          endDate: meetup.endDate != null && meetup.endDate!.isBefore(only)
-              ? only
-              : meetup.endDate,
-        ),
-      );
-    } else {
-      _apply(
-        meetup.copyWith(
-          endDate: only,
-          startDate: meetup.startDate != null && meetup.startDate!.isAfter(only)
-              ? only
-              : meetup.startDate,
-        ),
-      );
-    }
-  }
-}
-
-class _RangeChip extends StatelessWidget {
-  const _RangeChip({
-    required this.label,
-    required this.value,
-    this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surfaceHigh,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    ref.read(homeProvider.notifier).addMeetupExcludedDate(picked);
   }
 }

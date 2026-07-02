@@ -42,9 +42,6 @@ class PlanRecalculator {
             )
             ?.id
         : null;
-    final meetupRangeStart =
-        DateUtils.dateOnly(meetup.startDate ?? periodStart);
-    final meetupRangeEnd = DateUtils.dateOnly(meetup.endDate ?? periodEnd);
 
     for (final day in workingDays) {
       final active =
@@ -58,22 +55,20 @@ class PlanRecalculator {
       var usedOnDay = 0;
 
       // 0. Митап — только дополнение до целевого итога (с учётом YT)
-      if (meetup.isConfigured && meetupIssueId != null) {
-        final dayOnly = DateUtils.dateOnly(day);
-        if (!dayOnly.isBefore(meetupRangeStart) &&
-            !dayOnly.isAfter(meetupRangeEnd)) {
-          final additionalMeetup = MeetupAllocator.additionalMeetupMinutes(
-            targetPerDay: meetup.minutesPerDay,
-            existingOnDay: _existingMinutesOnDay(
-              existingContexts,
-              meetupIssueId,
-              day,
-            ),
-          );
-          if (additionalMeetup > 0) {
-            fixedOnDay[meetupIssueId] = additionalMeetup;
-            usedOnDay += additionalMeetup;
-          }
+      if (meetup.isConfigured &&
+          meetupIssueId != null &&
+          !meetup.isDayExcluded(day)) {
+        final additionalMeetup = MeetupAllocator.additionalMeetupMinutes(
+          targetPerDay: meetup.minutesPerDay,
+          existingOnDay: _existingMinutesOnDay(
+            existingContexts,
+            meetupIssueId,
+            day,
+          ),
+        );
+        if (additionalMeetup > 0) {
+          fixedOnDay[meetupIssueId] = additionalMeetup;
+          usedOnDay += additionalMeetup;
         }
       }
 

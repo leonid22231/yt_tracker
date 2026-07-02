@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/utils/app_date_picker.dart';
 import 'package:youtrack_timer/utils/date_utils.dart' as yt_date;
 
 /// Выбор рабочих дат, исключённых из расчёта плана.
@@ -81,8 +82,8 @@ class ExcludedDatesControl extends ConsumerWidget {
     final start = home.startDate!;
     final end = home.endDate!;
 
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showAppDatePicker(
+      context,
       initialDate: start,
       firstDate: start,
       lastDate: end,
@@ -93,14 +94,6 @@ class ExcludedDatesControl extends ConsumerWidget {
             day.weekday >= DateTime.monday &&
             day.weekday <= DateTime.friday;
       },
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: AppColors.primary,
-              ),
-        ),
-        child: child!,
-      ),
     );
     if (picked == null) return;
     ref.read(homeProvider.notifier).addExcludedDate(picked);

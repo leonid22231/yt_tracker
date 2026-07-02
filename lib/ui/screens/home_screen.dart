@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:youtrack_timer/models/loading_progress.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
 import 'package:youtrack_timer/ui/dialogs/confirm_write_dialog.dart';
+import 'package:youtrack_timer/ui/screens/gitlab_analysis_screen.dart';
 import 'package:youtrack_timer/ui/screens/plan_preview_screen.dart';
 import 'package:youtrack_timer/ui/screens/settings_screen.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/widgets/day_timeline_view.dart';
 import 'package:youtrack_timer/ui/widgets/hours_per_day_control.dart';
+import 'package:youtrack_timer/ui/widgets/loading_progress_view.dart';
 import 'package:youtrack_timer/ui/widgets/log_panel.dart';
 import 'package:youtrack_timer/ui/widgets/period_selector.dart';
 import 'package:youtrack_timer/ui/widgets/plan_list_view.dart';
@@ -49,7 +52,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       body: settings.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingProgressScreen(
+          operation: 'Загрузка',
+          stepLabel: 'Чтение настроек…',
+        ),
         error: (e, _) => Center(child: Text('Ошибка настроек: $e')),
         data: (s) => Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -81,7 +87,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     _AiInsightBanner(text: home.plan!.aiSummary),
                   Expanded(
                     child: home.plan == null
-                        ? const _EmptyState()
+                        ? (home.isLoading
+                            ? Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: LoadingProgressView(
+                                  progress: home.loadingProgress ??
+                                      LoadingProgress(
+                                        operation: 'Построение плана',
+                                        step: 1,
+                                        totalSteps: 7,
+                                        stepLabel: home.statusMessage.isNotEmpty
+                                            ? home.statusMessage
+                                            : 'Загрузка…',
+                                        startedAt: DateTime.now(),
+                                      ),
+                                  layout: LoadingProgressLayout.overlay,
+                                ),
+                              )
+                            : const _EmptyState())
                         : TabBarView(
                             controller: _tabs,
                             children: [
@@ -286,6 +309,12 @@ class _Sidebar extends StatelessWidget {
                 label: 'Cursor AI',
                 ok: settings.hasCursor && settings.useAi,
               ),
+              const SizedBox(height: 8),
+              StatusPill(
+                icon: Icons.hub_outlined,
+                label: 'GitLab',
+                ok: settings.hasGitLab,
+              ),
               if (settings.dryRun) ...[
                 const SizedBox(height: 8),
                 const StatusPill(
@@ -315,9 +344,28 @@ class _Sidebar extends StatelessWidget {
                         ),
                       )
                     : const Icon(Icons.auto_graph_rounded),
-                label: Text(home.plan == null ? 'Построить план' : 'Обновить план'),
+                label: Text(
+                  home.isLoading && home.loadingProgress != null
+                      ? '${home.loadingProgress!.percent}% · '
+                        '${home.plan == null ? 'Построение' : 'Обновление'}'
+                      : home.plan == null
+                          ? 'Построить план'
+                          : 'Обновить план',
+                ),
               ),
               const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: home.isLoading
+                    ? null
+                    : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const GitLabAnalysisScreen(),
+                          ),
+                        ),
+                icon: const Icon(Icons.analytics_outlined),
+                label: const Text('GitLab аналитика'),
+              ),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: home.isLoading ? null : onPreview,
                 icon: const Icon(Icons.fact_check_outlined),
@@ -460,27 +508,17 @@ class _StatusStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       color: AppColors.primarySoft,
-      child: Row(
-        children: [
-          if (home.isLoading)
-            const Padding(
-              padding: EdgeInsets.only(right: 12),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          Expanded(
-            child: Text(
+      child: home.isLoading && home.loadingProgress != null
+          ? LoadingProgressView(
+              progress: home.loadingProgress,
+              layout: LoadingProgressLayout.strip,
+            )
+          : Text(
               home.statusMessage,
               style: const TextStyle(fontSize: 13),
             ),
-          ),
-        ],
-      ),
     );
   }
 }

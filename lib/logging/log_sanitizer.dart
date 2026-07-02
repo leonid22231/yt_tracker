@@ -4,8 +4,10 @@ class LogSanitizer {
     RegExp(r'perm:[\w-]+', caseSensitive: false),
     RegExp(r'Bearer\s+[\w:.+-]+', caseSensitive: false),
     RegExp(r'cursor_[\w-]+', caseSensitive: false),
+    RegExp(r'glpat-[\w-]+', caseSensitive: false),
+    RegExp(r'PRIVATE-TOKEN\s+[\w-]+', caseSensitive: false),
     RegExp(
-      r'(YOUTRACK_TOKEN|CURSOR_API_KEY|token|apiKey|api_key)\s*[=:]\s*\S+',
+      r'(YOUTRACK_TOKEN|CURSOR_API_KEY|GITLAB_TOKEN|token|apiKey|api_key)\s*[=:]\s*\S+',
       caseSensitive: false,
     ),
   ];

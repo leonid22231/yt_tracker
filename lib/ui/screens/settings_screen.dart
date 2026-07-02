@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtrack_timer/config/app_config.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
+import 'package:youtrack_timer/ui/screens/gitlab_settings_screen.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/widgets/loading_progress_view.dart';
 import 'package:youtrack_timer/youtrack/youtrack_client.dart';
 
 /// Настройки подключений и режимов.
@@ -115,7 +117,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
       ),
       body: settings.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingProgressScreen(
+          operation: 'Настройки',
+          stepLabel: 'Загрузка сохранённых параметров…',
+        ),
         error: (e, _) => Center(child: Text('$e')),
         data: (s) {
           _bind(s);
@@ -166,6 +171,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     decoration: const InputDecoration(
                       labelText: 'CURSOR_API_KEY',
                     ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _SectionCard(
+                icon: Icons.hub_outlined,
+                title: 'GitLab',
+                children: [
+                  const Text(
+                    'Интеграция для аналитики по коммитам, веткам и задачам.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const GitLabSettingsScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.settings),
+                    label: const Text('Настройки GitLab'),
                   ),
                 ],
               ),

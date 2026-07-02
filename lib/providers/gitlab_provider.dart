@@ -1,13 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:youtrack_timer/agent/cursor_agent_client.dart';
 import 'package:youtrack_timer/gitlab/gitlab_client.dart';
 import 'package:youtrack_timer/logging/app_log.dart';
 import 'package:youtrack_timer/models/loading_progress.dart';
+import 'package:youtrack_timer/models/gitlab/gitlab_ai_summary.dart';
 import 'package:youtrack_timer/models/gitlab/gitlab_activity_data.dart';
-import 'package:youtrack_timer/models/gitlab/youtrack_gitlab_comparison.dart';
 import 'package:youtrack_timer/models/gitlab/tracked_time_record.dart';
+import 'package:youtrack_timer/models/gitlab/youtrack_gitlab_comparison.dart';
 import 'package:youtrack_timer/models/gitlab/gitlab_user_info.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/services/gitlab/gitlab_activity_service.dart';
+import 'package:youtrack_timer/services/gitlab/gitlab_ai_summarizer.dart';
 import 'package:youtrack_timer/services/gitlab/youtrack_gitlab_analyzer.dart';
 import 'package:youtrack_timer/services/gitlab/youtrack_tracked_time_service.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
@@ -40,6 +43,11 @@ class GitLabState {
     this.endDate,
     this.trackedTime,
     this.timeComparison,
+    this.isAiSummaryLoading = false,
+    this.aiSummaryLoadingDay,
+    this.aiSummary,
+    this.aiSummaryError = '',
+    this.aiSummaryErrorDay,
   });
 
   final bool isLoading;
@@ -54,6 +62,11 @@ class GitLabState {
   final DateTime? endDate;
   final YouTrackTrackedTimeData? trackedTime;
   final YouTrackGitLabComparison? timeComparison;
+  final bool isAiSummaryLoading;
+  final DateTime? aiSummaryLoadingDay;
+  final GitLabAiSummary? aiSummary;
+  final String aiSummaryError;
+  final DateTime? aiSummaryErrorDay;
 
   bool get hasComparison => timeComparison != null;
 
@@ -76,6 +89,15 @@ class GitLabState {
     DateTime? endDate,
     YouTrackTrackedTimeData? trackedTime,
     YouTrackGitLabComparison? timeComparison,
+    bool? isAiSummaryLoading,
+    DateTime? aiSummaryLoadingDay,
+    bool clearAiSummaryLoadingDay = false,
+    GitLabAiSummary? aiSummary,
+    bool clearAiSummary = false,
+    String? aiSummaryError,
+    DateTime? aiSummaryErrorDay,
+    bool clearAiSummaryError = false,
+    bool clearAiSummaryErrorDay = false,
     bool clearActivity = false,
     bool clearUser = false,
     bool clearError = false,
@@ -98,6 +120,16 @@ class GitLabState {
         trackedTime: clearTrackedTime ? null : (trackedTime ?? this.trackedTime),
         timeComparison:
             clearComparison ? null : (timeComparison ?? this.timeComparison),
+        isAiSummaryLoading: isAiSummaryLoading ?? this.isAiSummaryLoading,
+        aiSummaryLoadingDay: clearAiSummaryLoadingDay
+            ? null
+            : (aiSummaryLoadingDay ?? this.aiSummaryLoadingDay),
+        aiSummary: clearAiSummary ? null : (aiSummary ?? this.aiSummary),
+        aiSummaryError:
+            clearAiSummaryError ? '' : (aiSummaryError ?? this.aiSummaryError),
+        aiSummaryErrorDay: clearAiSummaryErrorDay
+            ? null
+            : (aiSummaryErrorDay ?? this.aiSummaryErrorDay),
       );
 }
 
@@ -455,5 +487,146 @@ class GitLabNotifier extends StateNotifier<GitLabState> {
       ));
       AppLog.instance.error(LogCategory.app, 'Сверка YT/GitLab: $e');
     }
+  }
+
+  void clearAiSummary() {
+    _setState(state.copyWith(
+      clearAiSummary: true,
+      clearAiSummaryError: true,
+      clearAiSummaryErrorDay: true,
+    ));
+  }
+
+  Future<void> generatePeriodAiSummary({
+    bool withYouTrack = false,
+    String? userHint,
+  }) =>
+      _generateAiSummary(day: null, withYouTrack: withYouTrack, userHint: userHint);
+
+  Future<void> generateDayAiSummary(
+    DateTime day, {
+    bool withYouTrack = false,
+    String? userHint,
+  }) =>
+      _generateAiSummary(
+        day: DateUtils.dateOnly(day),
+        withYouTrack: withYouTrack,
+        userHint: userHint,
+      );
+
+  Future<void> _generateAiSummary({
+    required DateTime? day,
+    required bool withYouTrack,
+    String? userHint,
+  }) async {
+    final settings = _settings?.normalized();
+    if (settings == null) return;
+
+    if (!settings.hasCursor || !settings.useAi) {
+      _setState(state.copyWith(
+        aiSummaryError: 'Укажите CURSOR_API_KEY и включите AI в настройках',
+        aiSummaryErrorDay: day,
+        clearAiSummaryErrorDay: day == null,
+      ));
+      return;
+    }
+
+    final activity = state.activity;
+    if (activity == null) {
+      _setState(state.copyWith(
+        aiSummaryError: 'Сначала загрузите GitLab-данные',
+        aiSummaryErrorDay: day,
+      ));
+      return;
+    }
+
+    if (withYouTrack && state.timeComparison == null) {
+      _setState(state.copyWith(
+        aiSummaryError: 'Сначала выполните сверку с YouTrack',
+        aiSummaryErrorDay: day,
+      ));
+      return;
+    }
+
+    final start = state.startDate ?? _defaultStart();
+    final end = state.endDate ?? _defaultEnd();
+
+    _setState(state.copyWith(
+      isAiSummaryLoading: true,
+      aiSummaryLoadingDay: day,
+      clearAiSummaryError: true,
+      clearAiSummaryErrorDay: true,
+      statusMessage: day == null
+          ? 'AI-сводка за период…'
+          : 'AI-сводка за ${DateUtils.formatForQuery(day)}…',
+    ));
+
+    final client = CursorAgentClient(apiKey: settings.cursorApiKey);
+    try {
+      final summarizer = GitLabAiSummarizer(client);
+      final text = day == null
+          ? await summarizer.summarizePeriod(
+              activity: activity,
+              start: start,
+              end: end,
+              comparison: withYouTrack ? state.timeComparison : null,
+              userHint: userHint,
+            )
+          : await summarizer.summarizeDay(
+              activity: activity,
+              day: day,
+              dayComparison: withYouTrack
+                  ? _dayComparison(day, state.timeComparison)
+                  : null,
+              periodComparison:
+                  withYouTrack ? state.timeComparison : null,
+              userHint: userHint,
+            );
+
+      if (!mounted) return;
+      _setState(state.copyWith(
+        isAiSummaryLoading: false,
+        clearAiSummaryLoadingDay: true,
+        aiSummary: GitLabAiSummary(
+          text: text,
+          withYouTrack: withYouTrack,
+          generatedAt: DateTime.now(),
+          day: day,
+        ),
+        statusMessage: 'AI-сводка готова',
+      ));
+      AppLog.instance.success(LogCategory.cursor, 'GitLab AI-сводка получена');
+    } on CursorAgentException catch (e) {
+      if (!mounted) return;
+      _setState(state.copyWith(
+        isAiSummaryLoading: false,
+        clearAiSummaryLoadingDay: true,
+        aiSummaryError: e.message,
+        aiSummaryErrorDay: day,
+      ));
+      AppLog.instance.error(LogCategory.cursor, 'GitLab AI: ${e.message}');
+    } catch (e) {
+      if (!mounted) return;
+      _setState(state.copyWith(
+        isAiSummaryLoading: false,
+        clearAiSummaryLoadingDay: true,
+        aiSummaryError: '$e',
+        aiSummaryErrorDay: day,
+      ));
+      AppLog.instance.error(LogCategory.cursor, 'GitLab AI: $e');
+    } finally {
+      client.close();
+    }
+  }
+
+  DailyTimeComparison? _dayComparison(
+    DateTime day,
+    YouTrackGitLabComparison? comparison,
+  ) {
+    if (comparison == null) return null;
+    for (final d in comparison.dailyComparisons) {
+      if (DateUtils.isSameDay(d.date, day)) return d;
+    }
+    return null;
   }
 }

@@ -9,6 +9,7 @@ import 'package:youtrack_timer/models/gitlab/merge_request_record.dart';
 import 'package:youtrack_timer/services/gitlab/gitlab_day_analyzer.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
+import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_ai_summary_panel.dart';
 import 'package:youtrack_timer/utils/open_external_url.dart';
 
 /// Детальная аналитика GitLab за выбранный день.
@@ -93,6 +94,8 @@ class GitLabDayDetailScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                GitLabAiSummaryPanel(day: date, compact: true),
+                const SizedBox(height: 16),
                 if (detail.isActive) ...[
                   _HeroStats(detail: detail),
                   const SizedBox(height: 16),

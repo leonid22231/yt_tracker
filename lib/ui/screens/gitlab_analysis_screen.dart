@@ -6,6 +6,7 @@ import 'package:youtrack_timer/providers/gitlab_provider.dart';
 import 'package:youtrack_timer/ui/screens/gitlab_day_detail_screen.dart';
 import 'package:youtrack_timer/ui/screens/gitlab_settings_screen.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_ai_summary_panel.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_activity_calendar.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_activity_charts.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_day_tile.dart';
@@ -364,6 +365,8 @@ class _AnalysisContentState extends State<_AnalysisContent> {
                     metrics: metrics,
                     onPeakDayTap: _openDay,
                   ),
+                  const SizedBox(height: 16),
+                  const GitLabAiSummaryPanel(),
                   const SizedBox(height: 16),
                   GitLabActivityCalendar(
                     metrics: metrics,

@@ -5,6 +5,9 @@ import 'package:youtrack_timer/models/gitlab/daily_activity_summary.dart';
 import 'package:youtrack_timer/models/gitlab/productivity_metric.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 
+/// Открывает детали дня только по клику, не при наведении (desktop hover).
+bool _isChartTap(FlTouchEvent event) => event is FlTapUpEvent;
+
 /// Графики GitLab-аналитики с улучшенным дизайном.
 class GitLabActivityCharts extends StatelessWidget {
   const GitLabActivityCharts({
@@ -195,6 +198,7 @@ class _ComboChart extends StatelessWidget {
         barTouchData: BarTouchData(
           enabled: onDayTap != null,
           touchCallback: (event, response) {
+            if (!_isChartTap(event)) return;
             final idx = response?.spot?.touchedBarGroupIndex;
             if (idx != null && idx >= 0 && idx < summaries.length) {
               onDayTap?.call(summaries[idx].date);
@@ -263,6 +267,7 @@ class _ProductivityChart extends StatelessWidget {
         lineTouchData: LineTouchData(
           enabled: onDayTap != null,
           touchCallback: (event, response) {
+            if (!_isChartTap(event)) return;
             final spots = response?.lineBarSpots;
             if (spots == null || spots.isEmpty) return;
             final idx = spots.first.spotIndex;
@@ -342,6 +347,7 @@ class _ChangesChart extends StatelessWidget {
         barTouchData: BarTouchData(
           enabled: onDayTap != null,
           touchCallback: (event, response) {
+            if (!_isChartTap(event)) return;
             final idx = response?.spot?.touchedBarGroupIndex;
             if (idx != null && idx >= 0 && idx < summaries.length) {
               onDayTap?.call(summaries[idx].date);

@@ -7,6 +7,8 @@ import 'package:youtrack_timer/models/day_timeline.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/services/day_timeline_builder.dart';
 import 'package:youtrack_timer/services/plan_builder_service.dart';
+import 'package:youtrack_timer/models/meetup_settings.dart';
+import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/utils/date_utils.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
 import 'package:youtrack_timer/services/submit_guard.dart';
@@ -51,6 +53,8 @@ class HomeState {
     this.issueBudgetMinutes = const {},
     this.excludedIssueIds = const {},
     this.recalcHint = '',
+    this.excludedDates = const {},
+    this.meetupSettings = const MeetupSettings(),
   });
 
   final bool isLoading;
@@ -71,6 +75,18 @@ class HomeState {
   /// Подсказка для AI при пересчёте (как чат с агентом).
   final String recalcHint;
 
+  /// Рабочие даты, исключённые из расчёта (больничный, отпуск и т.п.).
+  final Set<DateTime> excludedDates;
+
+  /// Ежедневный митап: фиксированная задача и минуты в день.
+  final MeetupSettings meetupSettings;
+
+  PlanCalculationOptions get calculationOptions => PlanCalculationOptions(
+        userHint: recalcHint,
+        excludedDates: excludedDates,
+        meetup: meetupSettings,
+      );
+
   int get minutesPerWorkDay => (hoursPerWorkDay * 60).round();
 
   /// Записи плана без исключённых задач (для проверки и записи в YT).
@@ -90,6 +106,8 @@ class HomeState {
     Map<String, int>? issueBudgetMinutes,
     Set<String>? excludedIssueIds,
     String? recalcHint,
+    Set<DateTime>? excludedDates,
+    MeetupSettings? meetupSettings,
   }) =>
       HomeState(
         isLoading: isLoading ?? this.isLoading,
@@ -101,6 +119,8 @@ class HomeState {
         issueBudgetMinutes: issueBudgetMinutes ?? this.issueBudgetMinutes,
         excludedIssueIds: excludedIssueIds ?? this.excludedIssueIds,
         recalcHint: recalcHint ?? this.recalcHint,
+        excludedDates: excludedDates ?? this.excludedDates,
+        meetupSettings: meetupSettings ?? this.meetupSettings,
       );
 }
 
@@ -170,6 +190,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
         start: state.startDate!,
         end: state.endDate!,
         useAi: settings.useAi,
+        calculationOptions: state.calculationOptions,
       );
 
       cursorClient?.close();
@@ -346,6 +367,32 @@ class HomeNotifier extends StateNotifier<HomeState> {
   /// Часов в рабочий день. [scheduleRecalc] — только после отпускания ползунка.
   void setRecalcHint(String hint) {
     state = state.copyWith(recalcHint: hint);
+    if (state.plan != null) _scheduleRecalculate();
+  }
+
+  void addExcludedDate(DateTime date) {
+    final normalized = DateUtils.dateOnly(date);
+    if (state.excludedDates.contains(normalized)) return;
+    final updated = Set<DateTime>.from(state.excludedDates)..add(normalized);
+    state = state.copyWith(excludedDates: updated);
+    _log.info(
+      LogCategory.plan,
+      'Исключена дата: ${DateUtils.formatForQuery(normalized)}',
+    );
+    if (state.plan != null) _scheduleRecalculate();
+  }
+
+  void removeExcludedDate(DateTime date) {
+    final normalized = DateUtils.dateOnly(date);
+    if (!state.excludedDates.contains(normalized)) return;
+    final updated = Set<DateTime>.from(state.excludedDates)..remove(normalized);
+    state = state.copyWith(excludedDates: updated);
+    if (state.plan != null) _scheduleRecalculate();
+  }
+
+  void setMeetupSettings(MeetupSettings settings, {bool scheduleRecalc = true}) {
+    state = state.copyWith(meetupSettings: settings);
+    if (scheduleRecalc && state.plan != null) _scheduleRecalculate();
   }
 
   void setHoursPerWorkDay(double hours, {bool scheduleRecalc = false}) {
@@ -422,6 +469,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
       periodStart: state.startDate!,
       periodEnd: state.endDate!,
       targetMinutesPerDay: state.minutesPerWorkDay,
+      excludedDates: state.calculationOptions.normalizedExcludedDates,
     );
   }
 
@@ -542,9 +590,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
         issueBudgetMinutes: state.issueBudgetMinutes,
         minutesPerWorkDay: state.minutesPerWorkDay,
         excludedIssueIds: state.excludedIssueIds,
-        userRecalcHint: state.recalcHint.trim().isEmpty
-            ? null
-            : state.recalcHint.trim(),
+        calculationOptions: state.calculationOptions,
       );
 
       cursorClient?.close();

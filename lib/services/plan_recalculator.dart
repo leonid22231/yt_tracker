@@ -1,4 +1,8 @@
 import 'package:youtrack_timer/models/issue.dart';
+import 'package:youtrack_timer/models/issue_context.dart';
+import 'package:youtrack_timer/services/meetup_allocator.dart';
+import 'package:youtrack_timer/models/meetup_settings.dart';
+import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/utils/date_utils.dart';
 
@@ -16,20 +20,62 @@ class PlanRecalculator {
     required DateTime periodEnd,
     required List<PlannedEntry> weightEntries,
     required Map<String, int> issueTotalMinutes,
+    PlanCalculationOptions options = const PlanCalculationOptions(),
+    MeetupSettings meetup = const MeetupSettings(),
+    List<IssueContext> existingContexts = const [],
   }) {
-    final workingDays = DateUtils.workingDays(periodStart, periodEnd);
+    final workingDays = options.workingDays(periodStart, periodEnd);
     if (workingDays.isEmpty || issues.isEmpty) return [];
+
+    final existingByDay = _existingMinutesByDay(existingContexts);
 
     final weights = _buildDayWeights(weightEntries);
     final result = <PlannedEntry>[];
+    final meetupIssueId = meetup.isConfigured
+        ? issues
+            .cast<YouTrackIssue?>()
+            .firstWhere(
+              (i) =>
+                  i!.idReadable.toUpperCase() ==
+                  meetup.issueIdReadable.trim().toUpperCase(),
+              orElse: () => null,
+            )
+            ?.id
+        : null;
+    final meetupRangeStart =
+        DateUtils.dateOnly(meetup.startDate ?? periodStart);
+    final meetupRangeEnd = DateUtils.dateOnly(meetup.endDate ?? periodEnd);
 
     for (final day in workingDays) {
       final active =
           issues.where((i) => _isActiveOnDay(i, day, periodStart, periodEnd)).toList();
       if (active.isEmpty) continue;
 
+      final dayKey = DateUtils.formatForQuery(day);
+      final existingOnDay = existingByDay[dayKey] ?? 0;
+
       final fixedOnDay = <String, int>{};
       var usedOnDay = 0;
+
+      // 0. Митап — только дополнение до целевого итога (с учётом YT)
+      if (meetup.isConfigured && meetupIssueId != null) {
+        final dayOnly = DateUtils.dateOnly(day);
+        if (!dayOnly.isBefore(meetupRangeStart) &&
+            !dayOnly.isAfter(meetupRangeEnd)) {
+          final additionalMeetup = MeetupAllocator.additionalMeetupMinutes(
+            targetPerDay: meetup.minutesPerDay,
+            existingOnDay: _existingMinutesOnDay(
+              existingContexts,
+              meetupIssueId,
+              day,
+            ),
+          );
+          if (additionalMeetup > 0) {
+            fixedOnDay[meetupIssueId] = additionalMeetup;
+            usedOnDay += additionalMeetup;
+          }
+        }
+      }
 
       // 1. Задачи с ручным лимитом — доля на этот день
       for (final issue in active) {
@@ -44,40 +90,62 @@ class PlanRecalculator {
         if (dayIndex < 0 || dayIndex >= perDay.length) continue;
 
         final minutes = perDay[dayIndex];
-        fixedOnDay[issue.id] = minutes;
+        fixedOnDay[issue.id] = (fixedOnDay[issue.id] ?? 0) + minutes;
         usedOnDay += minutes;
 
+        if (issue.id != meetupIssueId) {
+          result.add(
+            PlannedEntry(
+              issue: issue,
+              date: day,
+              minutes: minutes,
+              reasoning: 'Задано $total мин за период',
+              source: PlanSource.manual,
+            ),
+          );
+        }
+      }
+
+      // Записи митапа
+      if (meetupIssueId != null && (fixedOnDay[meetupIssueId] ?? 0) > 0) {
+        final meetupIssue =
+            issues.firstWhere((i) => i.id == meetupIssueId);
         result.add(
           PlannedEntry(
-            issue: issue,
+            issue: meetupIssue,
             date: day,
-            minutes: minutes,
-            reasoning: 'Задано $total мин за период',
+            minutes: fixedOnDay[meetupIssueId]!,
+            reasoning: 'Митап',
             source: PlanSource.manual,
           ),
         );
       }
 
-      // 2. Остаток дня — задачи без ручного лимита
-      final flexible = active.where((i) => !issueTotalMinutes.containsKey(i.id)).toList();
+      // 2. Остаток дня — задачи без ручного лимита и без митапа
+      final flexible = active
+          .where(
+            (i) =>
+                !issueTotalMinutes.containsKey(i.id) && i.id != meetupIssueId,
+          )
+          .toList();
       if (flexible.isEmpty) continue;
 
-      var remaining = minutesPerWorkDay - usedOnDay;
+      var remaining = minutesPerWorkDay - existingOnDay - usedOnDay;
       if (remaining <= 0) {
         // День переполнен ручными лимитами — гибкие задачи получают 0
         continue;
       }
 
-      final dayKey = DateTime(day.year, day.month, day.day);
+      final weightDayKey = DateTime(day.year, day.month, day.day);
       final weightSum = flexible.fold<int>(
         0,
-        (s, i) => s + (weights[i.id]?[dayKey] ?? 1),
+        (s, i) => s + (weights[i.id]?[weightDayKey] ?? 1),
       );
 
       var allocated = 0;
       for (var i = 0; i < flexible.length; i++) {
         final issue = flexible[i];
-        final w = weights[issue.id]?[dayKey] ?? 1;
+        final w = weights[issue.id]?[weightDayKey] ?? 1;
         int minutes;
         if (i == flexible.length - 1) {
           minutes = remaining - allocated;
@@ -151,6 +219,32 @@ class PlanRecalculator {
         issueStart.isBefore(periodStart) ? periodStart : issueStart;
     final dayOnly = DateTime(day.year, day.month, day.day);
     return !dayOnly.isBefore(effectiveStart) && !dayOnly.isAfter(periodEnd);
+  }
+
+  Map<String, int> _existingMinutesByDay(List<IssueContext> contexts) {
+    final map = <String, int>{};
+    for (final ctx in contexts) {
+      for (final w in ctx.existingWorkItems) {
+        final key = DateUtils.formatForQuery(w.date);
+        map[key] = (map[key] ?? 0) + w.minutes;
+      }
+    }
+    return map;
+  }
+
+  int _existingMinutesOnDay(
+    List<IssueContext> contexts,
+    String issueId,
+    DateTime day,
+  ) {
+    var total = 0;
+    for (final ctx in contexts) {
+      if (ctx.issue.id != issueId) continue;
+      for (final w in ctx.existingWorkItems) {
+        if (DateUtils.isSameDay(w.date, day)) total += w.minutes;
+      }
+    }
+    return total;
   }
 
   List<int> _splitMinutes(int total, int count) {

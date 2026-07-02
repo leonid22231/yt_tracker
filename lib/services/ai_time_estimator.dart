@@ -4,6 +4,7 @@ import 'package:youtrack_timer/agent/cursor_agent_client.dart';
 import 'package:youtrack_timer/logging/app_log.dart';
 import 'package:youtrack_timer/models/issue.dart';
 import 'package:youtrack_timer/models/issue_context.dart';
+import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/utils/date_utils.dart';
 import 'package:youtrack_timer/youtrack/youtrack_client.dart';
@@ -17,6 +18,15 @@ class AiTimeEstimator {
   static const _systemPrompt = '''
 Ты аналитик трудозатрат в YouTrack. По истории задач оцени, сколько минут разумно 
 списать на каждую задачу в каждый рабочий день периода.
+
+ПРИОРИТЕТ userHint (если поле userHint задано в данных):
+- userHint — ГЛАВНЫЙ И ВЫСШИЙ приоритет при расчёте. Полагайся на него ОБЯЗАТЕЛЬНО.
+- Если userHint противоречит истории задач, оценкам, previousPlan или твоим эвристикам — 
+  ВЫПОЛНЯЙ userHint, а не «умные» догадки по контексту.
+- userHint переопределяет распределение по дням, задачам и минутам, пока не нарушает 
+  жёсткие лимиты (minutesPerWorkDay, existingWorkItems, excludedDates).
+- Примеры: «болел 23 июня» → 0 минут на этот день; «с 10 по 20 митапы по 2 ч» → 
+  каждый рабочий день диапазона — митап 120 мин.
 
 Правила:
 - Сумма минут на каждый рабочий день = minutesPerWorkDay (см. данные).
@@ -33,6 +43,12 @@ class AiTimeEstimator {
 - Если на день уже списано >= лимита дня по этой задаче — 0 минут в estimates для этого дня.
 - Если задача неактивна в день — 0 минут, не включай в JSON.
 - Только рабочие дни (пн–пт) из списка workingDays.
+- excludedDates — дни, на которые НЕЛЬЗЯ ставить estimates (0 минут, не включай в JSON).
+- Если userHint задан — следуй ему в первую очередь (см. блок ПРИОРИТЕТ userHint выше).
+- meetupSettings (если задано) — minutesPerDay это ЦЕЛЕВОЙ итог митапа в день 
+  (уже списанное в existingWorkItems + новые estimates). В estimates ставь только 
+  ДОПОЛНИТЕЛЬНЫЕ минуты: max(0, minutesPerDay - списано на этот день по issueIdReadable).
+  Если в YT уже >= minutesPerDay — 0 минут в estimates для этого дня по митапу.
 
 Ответь ТОЛЬКО валидным JSON без markdown:
 {
@@ -51,11 +67,15 @@ class AiTimeEstimator {
 
   static const _recalculationPrompt = '''
 РЕЖИМ ПЕРЕСЧЁТА (пользователь изменил лимиты или часы в день):
+- userHint (если есть) — ВЫСШИЙ ПРИОРИТЕТ. Пересчитывай план строго по userHint; 
+  не сохраняй прежнее распределение, если оно ему противоречит.
 - Распредели время заново с учётом existingWorkItems и existingMinutesByDay.
 - На каждый день: сумма ДОПОЛНИТЕЛЬНЫХ estimates по всем задачам <= minutesPerWorkDay минус existingMinutesByDay[день].
 - userBudgetMinutesForPeriod (если задано у задачи) — жёсткий лимит ДОПОЛНИТЕЛЬНЫХ минут на задачу за весь период; распредели по активным дням.
 - previousPlan — предыдущее распределение (ориентир пропорций, не копируй слепо).
 - excludedFromPlan — ТОЛЬКО idReadable задач, которые пользователь убрал (остальные в issues — в плане).
+- excludedDates и userHint имеют приоритет над previousPlan и активностью в задачах: 
+  на исключённые/больничные дни estimates = 0; митапы и прочее из userHint — как указано.
 - После твоего ответа приложение само добьёт недозаполненные дни другими задачами из пула.
 ''';
 
@@ -69,10 +89,19 @@ class AiTimeEstimator {
     List<PlannedEntry> previousPlan = const [],
     List<String> excludedIssueIdsReadable = const [],
     String? userHint,
+    PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
     /// Все задачи с вашим списанным временем (в т.ч. не assignee) — для лимита дня.
     List<IssueContext> existingContexts = const [],
   }) async {
-    final workingDays = DateUtils.workingDays(periodStart, periodEnd);
+    final hint = userHint?.trim().isNotEmpty == true
+        ? userHint!.trim()
+        : calculationOptions.trimmedHint;
+    final workingDays =
+        calculationOptions.workingDays(periodStart, periodEnd);
+    final excludedFormatted = calculationOptions.normalizedExcludedDates
+        .map(DateUtils.formatForQuery)
+        .toList();
+    final meetup = calculationOptions.meetup;
     final daysFormatted =
         workingDays.map(DateUtils.formatForQuery).toList();
     final forExisting =
@@ -108,14 +137,36 @@ class AiTimeEstimator {
             .toList(),
       if (isRecalculation && excludedIssueIdsReadable.isNotEmpty)
         'excludedFromPlan': excludedIssueIdsReadable,
-      if (userHint != null && userHint.trim().isNotEmpty)
-        'userHint': userHint.trim(),
+      if (excludedFormatted.isNotEmpty) 'excludedDates': excludedFormatted,
+      if (meetup.isConfigured) 'meetupSettings': meetup.toJson(),
+      if (hint != null) 'userHint': hint,
     };
 
     final promptParts = [_systemPrompt];
     if (isRecalculation) promptParts.add(_recalculationPrompt);
-    if (userHint != null && userHint.trim().isNotEmpty) {
-      promptParts.add('Пожелание пользователя:\n${userHint.trim()}');
+    if (hint != null) {
+      promptParts.add(
+        'ПРИОРИТЕТ userHint — ОБЯЗАТЕЛЬНО СЛЕДУЙ (это главный источник правды при расчёте):\n'
+        '$hint',
+      );
+    }
+    if (excludedFormatted.isNotEmpty) {
+      promptParts.add(
+        'Исключённые даты (не ставь время): ${excludedFormatted.join(', ')}',
+      );
+    }
+    if (meetup.isConfigured) {
+      final from = meetup.startDate != null
+          ? DateUtils.formatForQuery(meetup.startDate!)
+          : 'начала периода';
+      final to = meetup.endDate != null
+          ? DateUtils.formatForQuery(meetup.endDate!)
+          : 'конца периода';
+      promptParts.add(
+        'Митап: ${meetup.issueIdReadable} — целевой итог ${meetup.minutesPerDay} мин/день '
+        '(включая уже списанное в YT; в estimates только дополнение) '
+        'на каждый рабочий день $from — $to',
+      );
     }
     final prompt =
         '${promptParts.join('\n')}\n\nДанные:\n${jsonEncode(payload)}';
@@ -127,6 +178,7 @@ class AiTimeEstimator {
       minutesPerWorkDay,
       existingByDay,
       contexts,
+      calculationOptions,
     );
   }
 
@@ -196,6 +248,7 @@ class AiTimeEstimator {
     int minutesPerWorkDay,
     Map<String, int> existingMinutesByDay,
     List<IssueContext> planContexts,
+    PlanCalculationOptions calculationOptions,
   ) {
     final jsonStr = _extractJson(raw);
     final map = jsonDecode(jsonStr) as Map<String, dynamic>;
@@ -203,6 +256,7 @@ class AiTimeEstimator {
     final estimates = estimatesRaw
         .map((e) => TimeEstimate.fromJson(e as Map<String, dynamic>))
         .where((e) => e.minutes > 0 && e.issueIdReadable.isNotEmpty)
+        .where((e) => !calculationOptions.isDayExcluded(e.date))
         .toList();
 
     final consolidated = _consolidateEstimates(estimates, planContexts);

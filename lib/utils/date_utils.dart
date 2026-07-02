@@ -15,6 +15,19 @@ class DateUtils {
     return days;
   }
 
+  /// Рабочие дни периода без [excludedDates] (больничные, отпуск и т.п.).
+  static List<DateTime> activeWorkingDays(
+    DateTime start,
+    DateTime end, {
+    Set<DateTime> excludedDates = const {},
+  }) {
+    if (excludedDates.isEmpty) return workingDays(start, end);
+    final excluded = excludedDates.map(dateOnly).toSet();
+    return workingDays(start, end)
+        .where((d) => !excluded.contains(dateOnly(d)))
+        .toList();
+  }
+
   static bool _isWeekday(DateTime date) {
     // DateTime.weekday: 1 = пн, 7 = вс
     return date.weekday >= DateTime.monday && date.weekday <= DateTime.friday;

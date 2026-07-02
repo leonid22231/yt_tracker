@@ -11,8 +11,13 @@ class DayTimelineBuilder {
     required DateTime periodStart,
     required DateTime periodEnd,
     required int targetMinutesPerDay,
+    Set<DateTime> excludedDates = const {},
   }) {
-    final workingDays = DateUtils.workingDays(periodStart, periodEnd);
+    final workingDays = DateUtils.activeWorkingDays(
+      periodStart,
+      periodEnd,
+      excludedDates: excludedDates,
+    );
     final byDay = <DateTime, List<DayTaskLine>>{
       for (final d in workingDays) d: [],
     };

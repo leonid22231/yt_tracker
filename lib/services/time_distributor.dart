@@ -1,6 +1,6 @@
 import 'package:youtrack_timer/models/issue.dart';
+import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/models/work_item.dart';
-import 'package:youtrack_timer/utils/date_utils.dart';
 
 /// Распределяет рабочее время по задачам на каждый день.
 class TimeDistributor {
@@ -15,8 +15,9 @@ class TimeDistributor {
     required List<YouTrackIssue> issues,
     required DateTime periodStart,
     required DateTime periodEnd,
+    PlanCalculationOptions options = const PlanCalculationOptions(),
   }) {
-    final workingDays = DateUtils.workingDays(periodStart, periodEnd);
+    final workingDays = options.workingDays(periodStart, periodEnd);
     if (workingDays.isEmpty || issues.isEmpty) {
       return [];
     }

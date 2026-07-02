@@ -1,5 +1,6 @@
 import 'package:youtrack_timer/models/issue.dart';
 import 'package:youtrack_timer/models/issue_context.dart';
+import 'package:youtrack_timer/models/plan_calculation_options.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/utils/date_utils.dart';
 
@@ -17,6 +18,7 @@ class DayGapFiller {
     required DateTime periodEnd,
     required List<IssueContext> existingContexts,
     required int minutesPerDay,
+    PlanCalculationOptions options = const PlanCalculationOptions(),
   }) {
     if (pool.isEmpty) return entries;
 
@@ -29,7 +31,7 @@ class DayGapFiller {
     }
 
     final result = List<PlannedEntry>.from(entries);
-    final workingDays = DateUtils.workingDays(periodStart, periodEnd);
+    final workingDays = options.workingDays(periodStart, periodEnd);
 
     for (final day in workingDays) {
       final key = DateUtils.formatForQuery(day);

@@ -53,13 +53,13 @@ class _RecalcHintFieldState extends ConsumerState<RecalcHintField> {
           onChanged: ref.read(homeProvider.notifier).setRecalcHint,
           decoration: const InputDecoration(
             hintText:
-                'Напр.: 5 мая без PLG-2296, время на KIOSK-114 или любую старую задачу',
+                'Напр.: 23 июня болел — не трекай. С 10 по 20 — митапы по 2 ч/день',
             isDense: true,
             contentPadding: EdgeInsets.all(12),
           ),
         ),
         const Text(
-          'Учитывается при пересчёте и исключении задач',
+          'Учитывается всегда: при построении и пересчёте плана',
           style: TextStyle(fontSize: 10, color: AppColors.textMuted),
         ),
       ],

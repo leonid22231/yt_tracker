@@ -7,6 +7,9 @@ import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/services/ai_time_estimator.dart';
 import 'package:youtrack_timer/services/day_gap_filler.dart';
 import 'package:youtrack_timer/services/day_timeline_builder.dart';
+import 'package:youtrack_timer/models/plan_calculation_options.dart';
+import 'package:youtrack_timer/services/day_plan_capper.dart';
+import 'package:youtrack_timer/services/meetup_allocator.dart';
 import 'package:youtrack_timer/services/plan_recalculator.dart';
 import 'package:youtrack_timer/services/time_distributor.dart';
 import 'package:youtrack_timer/youtrack/youtrack_client.dart';
@@ -40,6 +43,7 @@ class PlanBuilderService {
     required DateTime end,
     required bool useAi,
     int? minutesPerWorkDay,
+    PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
   }) async {
     final dayMinutes = minutesPerWorkDay ?? _minutesPerWorkDay;
     final log = AppLog.instance;
@@ -116,6 +120,7 @@ class PlanBuilderService {
           periodStart: start,
           periodEnd: end,
           minutesPerWorkDay: dayMinutes,
+          calculationOptions: calculationOptions,
         );
         aiSummary = aiResult.summary;
         usedAi = aiResult.usedAi;
@@ -127,22 +132,31 @@ class PlanBuilderService {
       } catch (e) {
         log.warn(LogCategory.cursor, 'AI недоступен, равномерное распределение');
         log.debug(LogCategory.cursor, '$e');
-        entries = _entriesFromEven(planIssues, start, end);
+        entries = _entriesFromEven(planIssues, start, end, calculationOptions);
       }
     } else {
       log.info(LogCategory.plan, 'Равномерное распределение…');
-      entries = _entriesFromEven(planIssues, start, end);
+      entries = _entriesFromEven(planIssues, start, end, calculationOptions);
     }
 
-    entries = _fillGaps(entries, planIssues, start, end, allContexts);
-
     final snapshot = List<PlannedEntry>.from(entries);
+    entries = _finalizeEntries(
+      entries,
+      planIssues,
+      start,
+      end,
+      allContexts,
+      dayMinutes,
+      calculationOptions,
+    );
+
     final timelines = await _buildDayTimelines(
       timelineContexts: allContexts,
       entries: entries,
       start: start,
       end: end,
       dayMinutes: dayMinutes,
+      calculationOptions: calculationOptions,
     );
 
     return PlanBuildResult(
@@ -164,7 +178,7 @@ class PlanBuilderService {
     required Map<String, int> issueBudgetMinutes,
     required int minutesPerWorkDay,
     Set<String> excludedIssueIds = const {},
-    String? userRecalcHint,
+    PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
   }) async {
     final log = AppLog.instance;
 
@@ -224,7 +238,7 @@ class PlanBuilderService {
           issueBudgetMinutesByIssueId: issueBudgetMinutes,
           previousPlan: weights,
           excludedIssueIdsReadable: excludedReadables,
-          userHint: userRecalcHint,
+          calculationOptions: calculationOptions,
         );
         aiSummary = aiResult.summary;
         usedAi = true;
@@ -243,6 +257,7 @@ class PlanBuilderService {
           issueBudgetMinutes: issueBudgetMinutes,
           minutesPerWorkDay: minutesPerWorkDay,
           excludedIssueIds: excluded,
+          calculationOptions: calculationOptions,
         );
       }
     } else {
@@ -253,16 +268,18 @@ class PlanBuilderService {
         issueBudgetMinutes: issueBudgetMinutes,
         minutesPerWorkDay: minutesPerWorkDay,
         excludedIssueIds: excluded,
+        calculationOptions: calculationOptions,
       );
     }
 
-    entries = _fillGaps(
+    entries = _finalizeEntries(
       entries,
       activeIssues,
       start,
       end,
       allContexts,
       minutesPerWorkDay,
+      calculationOptions,
     );
     if (activeIssues.isNotEmpty) {
       log.info(
@@ -276,6 +293,7 @@ class PlanBuilderService {
       start: start,
       end: end,
       dayMinutes: minutesPerWorkDay,
+      calculationOptions: calculationOptions,
     );
 
     return PlanBuildResult(
@@ -335,6 +353,7 @@ class PlanBuilderService {
     required DateTime start,
     required DateTime end,
     required int dayMinutes,
+    PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
   }) async {
     if (timelineContexts.isEmpty && entries.isEmpty) return [];
 
@@ -344,6 +363,7 @@ class PlanBuilderService {
       periodStart: start,
       periodEnd: end,
       targetMinutesPerDay: dayMinutes,
+      excludedDates: calculationOptions.normalizedExcludedDates,
     );
   }
 
@@ -374,6 +394,7 @@ class PlanBuilderService {
     required Map<String, int> issueBudgetMinutes,
     required int minutesPerWorkDay,
     Set<String> excludedIssueIds = const {},
+    PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
   }) {
     final weights = (current.baselineEntries.isNotEmpty
             ? current.baselineEntries
@@ -389,6 +410,9 @@ class PlanBuilderService {
       periodEnd: end,
       weightEntries: weights,
       issueTotalMinutes: issueBudgetMinutes,
+      options: calculationOptions,
+      meetup: calculationOptions.meetup,
+      existingContexts: current.issueContexts,
     );
   }
 
@@ -417,11 +441,13 @@ class PlanBuilderService {
     List<YouTrackIssue> issues,
     DateTime start,
     DateTime end,
+    PlanCalculationOptions calculationOptions,
   ) {
     final planned = _distributor.buildPlan(
       issues: issues,
       periodStart: start,
       periodEnd: end,
+      options: calculationOptions,
     );
     return planned
         .map(
@@ -436,22 +462,63 @@ class PlanBuilderService {
         .toList();
   }
 
+  List<PlannedEntry> _finalizeEntries(
+    List<PlannedEntry> entries,
+    List<YouTrackIssue> issues,
+    DateTime start,
+    DateTime end,
+    List<IssueContext> contexts,
+    int minutesPerDay,
+    PlanCalculationOptions calculationOptions,
+  ) {
+    var result = calculationOptions.filterExcludedDays(entries);
+    result = MeetupAllocator.apply(
+      entries: result,
+      meetup: calculationOptions.meetup,
+      options: calculationOptions,
+      periodStart: start,
+      periodEnd: end,
+      issues: issues,
+      existingContexts: contexts,
+    );
+    result = _fillGaps(
+      result,
+      issues,
+      start,
+      end,
+      contexts,
+      minutesPerDay,
+      calculationOptions,
+    );
+    result = DayPlanCapper.cap(
+      entries: result,
+      existingContexts: contexts,
+      minutesPerDay: minutesPerDay,
+      options: calculationOptions,
+      periodStart: start,
+      periodEnd: end,
+    );
+    return calculationOptions.filterExcludedDays(result);
+  }
+
   /// Дни ниже нормы: добиваем из любых задач плана (созданы не позже этого дня).
   List<PlannedEntry> _fillGaps(
     List<PlannedEntry> entries,
     List<YouTrackIssue> issues,
     DateTime start,
     DateTime end,
-    List<IssueContext> contexts, [
-    int? minutesPerWorkDay,
-  ]) {
+    List<IssueContext> contexts,
+    int minutesPerWorkDay,
+    PlanCalculationOptions calculationOptions,
+  ) {
     return DayGapFiller.fill(
       entries: entries,
       pool: issues,
       periodStart: start,
       periodEnd: end,
       existingContexts: contexts,
-      minutesPerDay: minutesPerWorkDay ?? _minutesPerWorkDay,
+      minutesPerDay: minutesPerWorkDay,
+      options: calculationOptions,
     );
   }
 

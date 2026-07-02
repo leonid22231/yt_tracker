@@ -11,6 +11,8 @@ import 'package:youtrack_timer/ui/widgets/hours_per_day_control.dart';
 import 'package:youtrack_timer/ui/widgets/log_panel.dart';
 import 'package:youtrack_timer/ui/widgets/period_selector.dart';
 import 'package:youtrack_timer/ui/widgets/plan_list_view.dart';
+import 'package:youtrack_timer/ui/widgets/excluded_dates_control.dart';
+import 'package:youtrack_timer/ui/widgets/meetup_settings_control.dart';
 import 'package:youtrack_timer/ui/widgets/recalc_hint_field.dart';
 import 'package:youtrack_timer/ui/widgets/status_pill.dart';
 
@@ -197,12 +199,16 @@ class _Sidebar extends StatelessWidget {
         border: Border(right: BorderSide(color: AppColors.border)),
       ),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
@@ -260,8 +266,12 @@ class _Sidebar extends StatelessWidget {
                 onChanged: (s, e) =>
                     ref.read(homeProvider.notifier).setPeriod(s, e),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+              const ExcludedDatesControl(),
+              const SizedBox(height: 16),
               const HoursPerDayControl(),
+              const SizedBox(height: 16),
+              const MeetupSettingsControl(),
               const SizedBox(height: 16),
               const RecalcHintField(),
               const SizedBox(height: 16),
@@ -284,7 +294,15 @@ class _Sidebar extends StatelessWidget {
                   ok: true,
                 ),
               ],
-              const Spacer(),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               FilledButton.icon(
                 onPressed: home.isLoading ? null : onBuild,
                 icon: home.isLoading
@@ -329,8 +347,10 @@ class _Sidebar extends StatelessWidget {
                     style: TextStyle(fontSize: 11, color: AppColors.warning),
                   ),
                 ),
-            ],
-          ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

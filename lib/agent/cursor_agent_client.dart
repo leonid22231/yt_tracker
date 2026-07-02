@@ -32,7 +32,7 @@ class CursorAgentClient {
     final createUri = Uri.parse('$baseUrl/v1/agents');
     final body = jsonEncode({
       'prompt': {'text': promptText},
-      'model': {'id': 'composer-2.5'},
+      'model': {'id': 'auto'},
       // Без repos — агент только анализирует переданный контекст
     });
 

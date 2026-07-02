@@ -135,6 +135,7 @@ class _GitLabAnalysisScreenState extends ConsumerState<GitLabAnalysisScreen>
                             gitLab: gitLab,
                             tabController: _tabs,
                             hasYouTrack: settings?.hasYouTrack == true,
+                            youTrackBaseUrl: settings?.youTrackUrl,
                           ),
           ),
         ],
@@ -315,11 +316,13 @@ class _AnalysisContent extends StatefulWidget {
     required this.gitLab,
     required this.tabController,
     required this.hasYouTrack,
+    this.youTrackBaseUrl,
   });
 
   final GitLabState gitLab;
   final TabController tabController;
   final bool hasYouTrack;
+  final String? youTrackBaseUrl;
 
   @override
   State<_AnalysisContent> createState() => _AnalysisContentState();
@@ -429,6 +432,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
                     YouTrackGitLabComparisonView(
                       comparison: widget.gitLab.timeComparison!,
                       trackedIsDemo: widget.gitLab.trackedTime?.isDemo == true,
+                      youTrackBaseUrl: widget.youTrackBaseUrl,
                     )
                   else
                     _YouTrackComparisonEmpty(hasYouTrack: widget.hasYouTrack),

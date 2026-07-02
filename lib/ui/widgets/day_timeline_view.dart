@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/day_timeline.dart';
+import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
+import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
 
 /// Посуточная шкала: уже в YouTrack + новый план.
-class DayTimelineView extends StatelessWidget {
+class DayTimelineView extends ConsumerWidget {
   const DayTimelineView({
     super.key,
     required this.timelines,
@@ -14,7 +17,8 @@ class DayTimelineView extends StatelessWidget {
   final List<DayTimeline> timelines;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final youTrackBaseUrl = ref.watch(settingsProvider).valueOrNull?.youTrackUrl;
     if (timelines.isEmpty) {
       return const Center(
         child: Text(
@@ -55,7 +59,10 @@ class DayTimelineView extends StatelessWidget {
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: timelines.length,
-              itemBuilder: (_, i) => _DayCard(timeline: timelines[i]),
+              itemBuilder: (_, i) => _DayCard(
+                timeline: timelines[i],
+                youTrackBaseUrl: youTrackBaseUrl,
+              ),
             ),
           ),
         ],
@@ -91,9 +98,13 @@ class _LegendDot extends StatelessWidget {
 }
 
 class _DayCard extends StatefulWidget {
-  const _DayCard({required this.timeline});
+  const _DayCard({
+    required this.timeline,
+    this.youTrackBaseUrl,
+  });
 
   final DayTimeline timeline;
+  final String? youTrackBaseUrl;
 
   @override
   State<_DayCard> createState() => _DayCardState();
@@ -175,7 +186,12 @@ class _DayCardState extends State<_DayCard> {
                       style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                     )
                   else
-                    ...t.lines.map((line) => _TaskLineRow(line: line)),
+                    ...t.lines.map(
+                      (line) => _TaskLineRow(
+                        line: line,
+                        youTrackBaseUrl: widget.youTrackBaseUrl,
+                      ),
+                    ),
                   if (t.remainingMinutes > 0 && t.lines.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
@@ -244,9 +260,13 @@ class _DayStackedBar extends StatelessWidget {
 }
 
 class _TaskLineRow extends StatelessWidget {
-  const _TaskLineRow({required this.line});
+  const _TaskLineRow({
+    required this.line,
+    this.youTrackBaseUrl,
+  });
 
   final DayTaskLine line;
+  final String? youTrackBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -271,13 +291,26 @@ class _TaskLineRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${isExisting ? 'Уже в YT' : 'План'} · ${line.issueIdReadable}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      '${isExisting ? 'Уже в YT' : 'План'} · ',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
+                    ),
+                    YouTrackIssueLink(
+                      issueIdReadable: line.issueIdReadable,
+                      baseUrl: youTrackBaseUrl,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
+                    ),
+                  ],
                 ),
                 Text(
                   line.summary,

@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:youtrack_timer/gitlab/gitlab_links.dart';
 import 'package:youtrack_timer/models/gitlab/branch_record.dart';
 import 'package:youtrack_timer/models/gitlab/commit_record.dart';
 import 'package:youtrack_timer/models/gitlab/gitlab_activity_data.dart';
 import 'package:youtrack_timer/models/gitlab/merge_request_record.dart';
+import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/services/gitlab/gitlab_day_analyzer.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_ai_summary_panel.dart';
+import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
 import 'package:youtrack_timer/utils/open_external_url.dart';
 
 /// Детальная аналитика GitLab за выбранный день.
-class GitLabDayDetailScreen extends StatelessWidget {
+class GitLabDayDetailScreen extends ConsumerWidget {
   const GitLabDayDetailScreen({
     super.key,
     required this.activity,
@@ -24,12 +27,13 @@ class GitLabDayDetailScreen extends StatelessWidget {
   final DateTime date;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final detail = const GitLabDayAnalyzer().build(
       activity: activity,
       date: date,
     );
     final baseUrl = activity.gitLabBaseUrl;
+    final youTrackBaseUrl = ref.watch(settingsProvider).valueOrNull?.youTrackUrl;
     final dateLabel = DateFormat('EEEE, d MMMM yyyy', 'ru').format(detail.date);
 
     return Scaffold(
@@ -135,7 +139,10 @@ class GitLabDayDetailScreen extends StatelessWidget {
                       runSpacing: 8,
                       children: [
                         for (final id in detail.summary.taskIds)
-                          _TaskChip(taskId: id),
+                          YouTrackIssueChip(
+                            issueIdReadable: id,
+                            baseUrl: youTrackBaseUrl,
+                          ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -148,7 +155,11 @@ class GitLabDayDetailScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     for (final mr in detail.mergeRequests)
-                      _MergeRequestTile(mr: mr, baseUrl: baseUrl),
+                      _MergeRequestTile(
+                        mr: mr,
+                        baseUrl: baseUrl,
+                        youTrackBaseUrl: youTrackBaseUrl,
+                      ),
                     const SizedBox(height: 20),
                   ],
                   if (detail.commits.isNotEmpty) ...[
@@ -159,7 +170,11 @@ class GitLabDayDetailScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     for (final c in detail.commits)
-                      _CommitTile(commit: c, baseUrl: baseUrl),
+                      _CommitTile(
+                        commit: c,
+                        baseUrl: baseUrl,
+                        youTrackBaseUrl: youTrackBaseUrl,
+                      ),
                     const SizedBox(height: 20),
                   ],
                   if (detail.branches.isNotEmpty) ...[
@@ -170,7 +185,11 @@ class GitLabDayDetailScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     for (final b in detail.branches)
-                      _BranchTile(branch: b, baseUrl: baseUrl),
+                      _BranchTile(
+                        branch: b,
+                        baseUrl: baseUrl,
+                        youTrackBaseUrl: youTrackBaseUrl,
+                      ),
                   ],
                 ] else
                   _EmptyDayCard(date: detail.date),
@@ -356,10 +375,15 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _MergeRequestTile extends StatelessWidget {
-  const _MergeRequestTile({required this.mr, required this.baseUrl});
+  const _MergeRequestTile({
+    required this.mr,
+    required this.baseUrl,
+    required this.youTrackBaseUrl,
+  });
 
   final MergeRequestRecord mr;
   final String baseUrl;
+  final String? youTrackBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -382,6 +406,13 @@ class _MergeRequestTile extends StatelessWidget {
           const SizedBox(height: 8),
           Text('${mr.sourceBranch} → ${mr.targetBranch}',
               style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+          if (mr.taskIds.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            YouTrackIssueChipList(
+              issueIds: mr.taskIds,
+              baseUrl: youTrackBaseUrl,
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             children: [
@@ -403,10 +434,15 @@ class _MergeRequestTile extends StatelessWidget {
 }
 
 class _CommitTile extends StatelessWidget {
-  const _CommitTile({required this.commit, required this.baseUrl});
+  const _CommitTile({
+    required this.commit,
+    required this.baseUrl,
+    required this.youTrackBaseUrl,
+  });
 
   final CommitRecord commit;
   final String baseUrl;
+  final String? youTrackBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -438,6 +474,13 @@ class _CommitTile extends StatelessWidget {
           const SizedBox(height: 6),
           Text(commit.projectName,
               style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+          if (commit.taskIds.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            YouTrackIssueChipList(
+              issueIds: commit.taskIds,
+              baseUrl: youTrackBaseUrl,
+            ),
+          ],
           if (commit.mergeRequestIid != null)
             Text('MR !${commit.mergeRequestIid}',
                 style: const TextStyle(fontSize: 11, color: AppColors.accent)),
@@ -465,10 +508,15 @@ class _CommitTile extends StatelessWidget {
 }
 
 class _BranchTile extends StatelessWidget {
-  const _BranchTile({required this.branch, required this.baseUrl});
+  const _BranchTile({
+    required this.branch,
+    required this.baseUrl,
+    required this.youTrackBaseUrl,
+  });
 
   final BranchRecord branch;
   final String baseUrl;
+  final String? youTrackBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -488,6 +536,13 @@ class _BranchTile extends StatelessWidget {
                 Text(branch.projectName,
                     style: const TextStyle(
                         fontSize: 11, color: AppColors.textMuted)),
+                if (branch.taskIds.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  YouTrackIssueChipList(
+                    issueIds: branch.taskIds,
+                    baseUrl: youTrackBaseUrl,
+                  ),
+                ],
               ],
             ),
           ),
@@ -534,31 +589,6 @@ class _LinkChip extends StatelessWidget {
       label: Text(label, style: const TextStyle(fontSize: 11)),
       onPressed: onTap,
       avatar: const Icon(Icons.folder_outlined, size: 16),
-    );
-  }
-}
-
-class _TaskChip extends StatelessWidget {
-  const _TaskChip({required this.taskId});
-
-  final String taskId;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        taskId,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: AppColors.primary,
-        ),
-      ),
     );
   }
 }

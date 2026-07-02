@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtrack_timer/config/app_config.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
+import 'package:youtrack_timer/providers/design_variant_provider.dart';
+import 'package:youtrack_timer/ui/theme/design_variant.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
 import 'package:youtrack_timer/ui/screens/gitlab_settings_screen.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
@@ -192,6 +194,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     icon: const Icon(Icons.settings),
                     label: const Text('Настройки GitLab'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _SectionCard(
+                icon: Icons.palette_outlined,
+                title: 'Интерфейс',
+                children: [
+                  const Text(
+                    'Режим оформления. При ручном выборе авто отключается.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  ),
+                  const SizedBox(height: 12),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final mode = ref.watch(designModePreferenceProvider);
+                      return SegmentedButton<DesignModePreference>(
+                        segments: [
+                          for (final m in DesignModePreference.values)
+                            ButtonSegment(
+                              value: m,
+                              label: Text(m.label),
+                              icon: Icon(
+                                switch (m) {
+                                  DesignModePreference.auto =>
+                                    Icons.auto_mode,
+                                  DesignModePreference.current =>
+                                    Icons.tablet,
+                                  DesignModePreference.large =>
+                                    Icons.desktop_windows_outlined,
+                                },
+                                size: 16,
+                              ),
+                            ),
+                        ],
+                        selected: {mode},
+                        onSelectionChanged: (s) => ref
+                            .read(designModePreferenceProvider.notifier)
+                            .setPreference(s.first),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final mode = ref.watch(designModePreferenceProvider);
+                      return Text(
+                        mode.description,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

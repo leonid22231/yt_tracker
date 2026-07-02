@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/gitlab/youtrack_gitlab_comparison.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
+import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
 
 /// UI сверки YouTrack и GitLab.
 class YouTrackGitLabComparisonView extends StatelessWidget {
@@ -11,10 +12,12 @@ class YouTrackGitLabComparisonView extends StatelessWidget {
     super.key,
     required this.comparison,
     this.trackedIsDemo = false,
+    this.youTrackBaseUrl,
   });
 
   final YouTrackGitLabComparison comparison;
   final bool trackedIsDemo;
+  final String? youTrackBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +62,10 @@ class YouTrackGitLabComparisonView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           for (final task in comparison.mismatchedTasks)
-            _TaskComparisonCard(task: task),
+            _TaskComparisonCard(
+              task: task,
+              youTrackBaseUrl: youTrackBaseUrl,
+            ),
           const SizedBox(height: 16),
         ],
         const Text(
@@ -349,9 +355,13 @@ class _DailyComparisonCard extends StatelessWidget {
 }
 
 class _TaskComparisonCard extends StatelessWidget {
-  const _TaskComparisonCard({required this.task});
+  const _TaskComparisonCard({
+    required this.task,
+    this.youTrackBaseUrl,
+  });
 
   final TaskTimeComparison task;
+  final String? youTrackBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -366,12 +376,10 @@ class _TaskComparisonCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    task.taskId,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
+                  YouTrackIssueLink(
+                    issueIdReadable: task.taskId,
+                    baseUrl: youTrackBaseUrl,
+                    showIcon: true,
                   ),
                   if (task.issueSummary.isNotEmpty)
                     Text(

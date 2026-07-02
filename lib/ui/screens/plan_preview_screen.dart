@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:youtrack_timer/config/app_config.dart';
@@ -11,15 +10,14 @@ import 'package:youtrack_timer/services/plan_builder_service.dart';
 import 'package:youtrack_timer/services/plan_preview_builder.dart';
 import 'package:youtrack_timer/services/submit_service.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
-import 'package:youtrack_timer/ui/widgets/loading_progress_view.dart';
+import 'package:youtrack_timer/ui/theme/design_tokens.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
-import 'package:youtrack_timer/ui/widgets/preview/youtrack_calendar_cell.dart';
-import 'package:youtrack_timer/ui/widgets/preview/youtrack_calendar_grid.dart';
-import 'package:youtrack_timer/utils/open_external_url.dart';
+import 'package:youtrack_timer/ui/widgets/loading_progress_view.dart';
+import 'package:youtrack_timer/ui/widgets/preview/plan_preview_day_list.dart';
+import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
 import 'package:youtrack_timer/youtrack/youtrack_client.dart';
-import 'package:youtrack_timer/youtrack/youtrack_links.dart';
 
-/// Окно проверки плана — календарь как в YouTrack.
+/// Окно проверки плана перед записью в YouTrack.
 class PlanPreviewScreen extends ConsumerStatefulWidget {
   const PlanPreviewScreen({
     super.key,
@@ -46,7 +44,6 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
   String? _error;
   SubmitResult? _result;
   List<PlanPreviewDay> _days = [];
-  List<List<PlanPreviewDay?>> _weekRows = [];
 
   @override
   void initState() {
@@ -109,11 +106,9 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
       setState(() {
         _result = detailed.result;
         _days = days;
-        _weekRows = PlanPreviewBuilder.buildWeekRows(days);
         _loading = false;
         _progress = null;
       });
-
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -124,34 +119,44 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
           plan: widget.plan,
           entriesToCheck: widget.entries,
         );
-        _weekRows = PlanPreviewBuilder.buildWeekRows(_days);
       });
     }
   }
 
-  void _onIssueTap(PlanPreviewRow row, PlanPreviewDay day) {
-    final url = YouTrackLinks.issueUrl(widget.baseUrl, row.issueIdReadable);
+  void _showIssueDetails(PlanPreviewRow row, PlanPreviewDay day) {
     final fmt = DateFormat('d MMMM yyyy', 'ru');
 
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.surfaceHigh,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                row.issueIdReadable,
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              YouTrackIssueLink(
+                issueIdReadable: row.issueIdReadable,
+                baseUrl: widget.baseUrl,
+                showIcon: true,
                 style: const TextStyle(
                   fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 6),
@@ -160,41 +165,24 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
                 style: const TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
+                  height: 1.4,
                 ),
               ),
               const SizedBox(height: 16),
               _detailLine('День', fmt.format(day.day)),
               if (row.existingMinutes > 0)
-                _detailLine('Уже в YouTrack', TimeFormat.minutes(row.existingMinutes)),
+                _detailLine(
+                  'Уже в YouTrack',
+                  TimeFormat.minutes(row.existingMinutes),
+                ),
               if (row.plannedMinutes > 0) ...[
                 _detailLine(
                   'Новый план',
                   TimeFormat.minutes(row.plannedMinutes),
                 ),
-                _detailLine(
-                  'При записи',
-                  _statusLabel(row.plannedStatus),
-                ),
+                _detailLine('При записи', _statusLabel(row.plannedStatus)),
               ],
               _detailLine('Итого за день', TimeFormat.minutes(row.totalMinutes)),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: () => _openIssue(url),
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text('Открыть в YouTrack'),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: url));
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Ссылка скопирована')),
-                  );
-                },
-                icon: const Icon(Icons.link, size: 18),
-                label: const Text('Копировать ссылку'),
-              ),
             ],
           ),
         ),
@@ -233,120 +221,86 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
     );
   }
 
-  Future<void> _openIssue(String url) async {
-    final ok = await openExternalUrl(url);
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Не удалось открыть браузер. Ссылка скопирована в буфер.'),
-        ),
-      );
-      await Clipboard.setData(ClipboardData(text: url));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final period =
         '${DateFormat('d MMM yyyy', 'ru').format(widget.startDate)} — '
         '${DateFormat('d MMM yyyy', 'ru').format(widget.endDate)}';
 
-    return Theme(
-      data: Theme.of(context).copyWith(
-        scaffoldBackgroundColor: const Color(0xFF1A1D23),
-      ),
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF23262D),
-          title: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Проверка плана', style: TextStyle(fontSize: 16)),
-              Text(
-                'Без записи в YouTrack',
-                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-              ),
-            ],
-          ),
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.pop(context),
-          ),
-          actions: [
-            if (!_loading)
-              IconButton(
-                tooltip: 'Обновить проверку',
-                onPressed: _runCheck,
-                icon: const Icon(Icons.refresh),
-              ),
-          ],
-        ),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_loading && _progress != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: LoadingProgressView(
-                  progress: _progress,
-                  layout: LoadingProgressLayout.panel,
-                ),
-              ),
-            _SummaryBar(
-              period: period,
-              loading: _loading,
-              error: _error,
-              result: _result,
-              entryCount: widget.entries.length,
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Row(
-                children: [
-                  _LegendItem(color: YtCalendarColors.link, label: 'Задача'),
-                  SizedBox(width: 16),
-                  _LegendItem(
-                    color: YtCalendarColors.newPlanned,
-                    label: 'Будет записано',
-                  ),
-                  SizedBox(width: 16),
-                  _LegendItem(
-                    color: YtCalendarColors.skipped,
-                    label: 'Пропуск',
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _weekRows.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'Нет рабочих дней в периоде',
-                        style: TextStyle(color: AppColors.textMuted),
-                      ),
-                    )
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(12),
-                      child: YoutrackCalendarGrid(
-                        weekRows: _weekRows,
-                        onIssueTap: _onIssueTap,
-                      ),
-                    ),
+            Text('Проверка плана', style: TextStyle(fontSize: 16)),
+            Text(
+              'Без записи в YouTrack',
+              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
             ),
           ],
         ),
+        actions: [
+          if (!_loading)
+            IconButton(
+              tooltip: 'Обновить проверку',
+              onPressed: _runCheck,
+              icon: const Icon(Icons.refresh, size: 20),
+            ),
+        ],
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HeaderPanel(
+            period: period,
+            loading: _loading,
+            error: _error,
+            result: _result,
+            entryCount: widget.entries.length,
+            dayCount: _days.length,
+          ),
+          if (_loading && _progress != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: LoadingProgressView(
+                progress: _progress,
+                layout: LoadingProgressLayout.strip,
+              ),
+            ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Row(
+              children: [
+                _LegendDot(color: AppColors.accent, label: 'Запишется'),
+                SizedBox(width: 16),
+                _LegendDot(color: AppColors.textMuted, label: 'Пропуск'),
+                SizedBox(width: 16),
+                _LegendDot(color: AppColors.existing, label: 'Уже в YT'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: PlanPreviewDayList(
+              days: _days,
+              baseUrl: widget.baseUrl,
+              onIssueTap: _showIssueDetails,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SummaryBar extends StatelessWidget {
-  const _SummaryBar({
+class _HeaderPanel extends StatelessWidget {
+  const _HeaderPanel({
     required this.period,
     required this.loading,
     required this.error,
     required this.result,
     required this.entryCount,
+    required this.dayCount,
   });
 
   final String period;
@@ -354,36 +308,62 @@ class _SummaryBar extends StatelessWidget {
   final String? error;
   final SubmitResult? result;
   final int entryCount;
+  final int dayCount;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: const Color(0xFF23262D),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             period,
             style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textMuted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           if (loading)
-            const Text('Проверка…')
+            const Text(
+              'Проверка дубликатов…',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            )
           else if (error != null)
             Text(error!, style: const TextStyle(color: AppColors.warning))
           else if (result != null)
-            Text(
-              'Записей в плане: $entryCount · '
-              'запишется: ${result!.created} · '
-              'пропуск: ${result!.skipped}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _StatTile(
+                  label: 'Записей в плане',
+                  value: '$entryCount',
+                  color: AppColors.primary,
+                ),
+                _StatTile(
+                  label: 'Запишется',
+                  value: '${result!.created}',
+                  color: AppColors.accent,
+                ),
+                _StatTile(
+                  label: 'Пропуск',
+                  value: '${result!.skipped}',
+                  color: AppColors.textMuted,
+                ),
+                _StatTile(
+                  label: 'Рабочих дней',
+                  value: '$dayCount',
+                  color: AppColors.textSecondary,
+                ),
+              ],
             ),
         ],
       ),
@@ -391,8 +371,49 @@ class _SummaryBar extends StatelessWidget {
   }
 }
 
-class _LegendItem extends StatelessWidget {
-  const _LegendItem({required this.color, required this.label});
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
 
   final Color color;
   final String label;
@@ -408,7 +429,10 @@ class _LegendItem extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+        ),
       ],
     );
   }

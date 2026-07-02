@@ -4,10 +4,13 @@ import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/issue.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
+import 'package:youtrack_timer/providers/design_variant_provider.dart';
 import 'package:youtrack_timer/services/plan_builder_service.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
 import 'package:youtrack_timer/ui/widgets/labeled_slider.dart';
+import 'package:youtrack_timer/ui/widgets/plan/plan_data_table_large.dart';
+import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
 
 /// Список задач плана с редактированием через слайдеры.
 class PlanListView extends ConsumerStatefulWidget {
@@ -45,7 +48,13 @@ class _PlanListViewState extends ConsumerState<PlanListView> {
 
   @override
   Widget build(BuildContext context) {
+    final isLarge = ref.watch(designVariantProvider).isLarge;
+    if (isLarge) {
+      return PlanDataTableLarge(plan: widget.plan);
+    }
+
     final home = ref.watch(homeProvider);
+    final youTrackBaseUrl = ref.watch(settingsProvider).valueOrNull?.youTrackUrl;
     final grouped = <String, List<PlannedEntry>>{};
     final issueOrder = <String>[];
 
@@ -153,6 +162,7 @@ class _PlanListViewState extends ConsumerState<PlanListView> {
                         budgetMinutes: home.issueBudgetMinutes[issueId],
                         expanded: expanded,
                         isRecalculating: home.isLoading,
+                        youTrackBaseUrl: youTrackBaseUrl,
                         onToggle: () => setState(() {
                           if (expanded) {
                             _expanded.remove(issueId);
@@ -206,6 +216,7 @@ class _PlanListViewState extends ConsumerState<PlanListView> {
                         (issue) => _ExcludedIssueCard(
                           issue: issue,
                           isRecalculating: home.isLoading,
+                          youTrackBaseUrl: youTrackBaseUrl,
                           onRestore: () => ref
                               .read(homeProvider.notifier)
                               .includeIssueInPlan(issue.id),
@@ -259,6 +270,7 @@ class _IssuePlanCard extends StatefulWidget {
     required this.budgetMinutes,
     required this.expanded,
     required this.isRecalculating,
+    required this.youTrackBaseUrl,
     required this.onToggle,
     required this.onBudgetChanged,
     required this.onEntryMinutesCommit,
@@ -271,6 +283,7 @@ class _IssuePlanCard extends StatefulWidget {
   final int? budgetMinutes;
   final bool expanded;
   final bool isRecalculating;
+  final String? youTrackBaseUrl;
   final VoidCallback onToggle;
   final void Function(double? hours, {required bool commit}) onBudgetChanged;
   final void Function(DateTime date, int minutes) onEntryMinutesCommit;
@@ -347,8 +360,10 @@ class _IssuePlanCardState extends State<_IssuePlanCard> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              issue.idReadable,
+                            YouTrackIssueLink(
+                              issueIdReadable: issue.idReadable,
+                              baseUrl: widget.youTrackBaseUrl,
+                              showIcon: true,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
@@ -553,11 +568,13 @@ class _ExcludedIssueCard extends StatelessWidget {
   const _ExcludedIssueCard({
     required this.issue,
     required this.isRecalculating,
+    required this.youTrackBaseUrl,
     required this.onRestore,
   });
 
   final YouTrackIssue issue;
   final bool isRecalculating;
+  final String? youTrackBaseUrl;
   final VoidCallback onRestore;
 
   @override
@@ -575,8 +592,9 @@ class _ExcludedIssueCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    issue.idReadable,
+                  YouTrackIssueLink(
+                    issueIdReadable: issue.idReadable,
+                    baseUrl: youTrackBaseUrl,
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       color: AppColors.textMuted,

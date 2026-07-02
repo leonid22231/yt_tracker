@@ -3,13 +3,16 @@ import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/gitlab/daily_activity_summary.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
+import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
 class GitLabDailySummaryCard extends StatelessWidget {
   const GitLabDailySummaryCard({
     super.key,
     required this.summary,
+    this.youTrackBaseUrl,
   });
 
   final DailyActivitySummary summary;
+  final String? youTrackBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -83,30 +86,9 @@ class GitLabDailySummaryCard extends StatelessWidget {
               ),
               if (summary.taskIds.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final id in summary.taskIds)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          id,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                  ],
+                YouTrackIssueChipList(
+                  issueIds: summary.taskIds,
+                  baseUrl: youTrackBaseUrl,
                 ),
               ],
             ],

@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:youtrack_timer/models/loading_progress.dart';
-import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 
 enum LoadingProgressLayout { strip, panel, overlay }
 
@@ -74,6 +75,7 @@ class _Strip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -83,18 +85,19 @@ class _Strip extends StatelessWidget {
             Expanded(
               child: Text(
                 progress.stepLabel,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  color: pal.textPrimary,
                 ),
               ),
             ),
             Text(
               '${progress.percent}%',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primary,
+                color: pal.link,
               ),
             ),
           ],
@@ -115,29 +118,34 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           progress.operation,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: AppColors.textMuted,
+            color: pal.textMuted,
             letterSpacing: 0.3,
           ),
         ),
         const SizedBox(height: 6),
         Text(
           progress.stepLabel,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: pal.textPrimary,
+          ),
         ),
         if (progress.detail != null && progress.detail!.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
             progress.detail!,
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: pal.textSecondary),
           ),
         ],
         const SizedBox(height: 12),
@@ -147,10 +155,10 @@ class _Panel extends StatelessWidget {
             const SizedBox(width: 12),
             Text(
               '${progress.percent}%',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: AppColors.primary,
+                color: pal.link,
               ),
             ),
           ],
@@ -169,42 +177,55 @@ class _Overlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = context.palette;
+    final panel = Padding(
+      padding: EdgeInsets.all(pal.isOneC ? 12 : 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: pal.link,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  progress.operation,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: pal.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: pal.isOneC ? 12 : 20),
+          _Panel(progress: progress),
+        ],
+      ),
+    );
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
-        child: Card(
-          margin: const EdgeInsets.all(24),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        progress.operation,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _Panel(progress: progress),
-              ],
-            ),
-          ),
-        ),
+        child: pal.isOneC
+            ? Container(
+                margin: const EdgeInsets.all(24),
+                decoration: OneCDecorations.raised(pal),
+                child: panel,
+              )
+            : Card(
+                margin: const EdgeInsets.all(24),
+                child: panel,
+              ),
       ),
     );
   }
@@ -217,13 +238,14 @@ class _ProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = context.palette;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(pal.isOneC ? 0 : 4),
       child: LinearProgressIndicator(
         value: fraction > 0 ? fraction : null,
         minHeight: 6,
-        backgroundColor: AppColors.border,
-        color: AppColors.primary,
+        backgroundColor: pal.border,
+        color: pal.link,
       ),
     );
   }
@@ -237,6 +259,7 @@ class _MetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = context.palette;
     final stepText =
         'Шаг ${progress.step} из ${progress.totalSteps} · ${progress.formatElapsed()}';
     final etaText = 'Осталось ${progress.formatEta()}';
@@ -244,7 +267,7 @@ class _MetaRow extends StatelessWidget {
     if (compact) {
       return Text(
         '$stepText · $etaText',
-        style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+        style: TextStyle(fontSize: 11, color: pal.textMuted),
       );
     }
 
@@ -253,15 +276,15 @@ class _MetaRow extends StatelessWidget {
         Expanded(
           child: Text(
             stepText,
-            style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+            style: TextStyle(fontSize: 11, color: pal.textMuted),
           ),
         ),
         Text(
           etaText,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
+            color: pal.textSecondary,
           ),
         ),
       ],

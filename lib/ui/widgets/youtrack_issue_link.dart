@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/theme/design_tokens.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
+import 'package:youtrack_timer/ui/utils/safe_set_state.dart';
 import 'package:youtrack_timer/utils/open_external_url.dart';
 import 'package:youtrack_timer/youtrack/youtrack_links.dart';
 
@@ -60,19 +62,26 @@ class _YouTrackIssueLinkState extends State<YouTrackIssueLink> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+    final oneC = palette.isOneC;
+
     final defaultStyle = TextStyle(
-      fontSize: 13,
+      fontSize: oneC ? 11 : 13,
       fontWeight: FontWeight.w600,
       color: _canOpen
-          ? (_hovered ? AppColors.accent : AppColors.primary)
-          : AppColors.textSecondary,
+          ? (_hovered
+              ? (oneC ? palette.linkHover : AppColors.accent)
+              : (oneC ? palette.link : AppColors.primary))
+          : (oneC ? palette.textMuted : AppColors.textSecondary),
       decoration: _canOpen ? TextDecoration.underline : null,
-      decorationColor: AppColors.primary.withValues(alpha: 0.5),
+      decorationColor: oneC
+          ? palette.link
+          : AppColors.primary.withValues(alpha: 0.5),
     );
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => deferSetState(this, () => _hovered = true),
+      onExit: (_) => deferSetState(this, () => _hovered = false),
       cursor: _canOpen ? SystemMouseCursors.click : SystemMouseCursors.basic,
       child: InkWell(
         onTap: widget.onTap ??
@@ -83,7 +92,8 @@ class _YouTrackIssueLinkState extends State<YouTrackIssueLink> {
                       issueIdReadable: widget.issueIdReadable,
                     )
                 : null),
-        borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
+        borderRadius:
+            oneC ? BorderRadius.zero : BorderRadius.circular(DesignTokens.radiusSm),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -100,7 +110,9 @@ class _YouTrackIssueLinkState extends State<YouTrackIssueLink> {
               Icon(
                 Icons.open_in_new,
                 size: 12,
-                color: (_hovered ? AppColors.accent : AppColors.primary)
+                color: (_hovered
+                        ? (oneC ? palette.linkHover : AppColors.accent)
+                        : (oneC ? palette.link : AppColors.primary))
                     .withValues(alpha: 0.8),
               ),
             ],
@@ -134,8 +146,8 @@ class _YouTrackIssueChipState extends State<YouTrackIssueChip> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => deferSetState(this, () => _hovered = true),
+      onExit: (_) => deferSetState(this, () => _hovered = false),
       cursor: _canOpen ? SystemMouseCursors.click : SystemMouseCursors.basic,
       child: Material(
         color: _hovered ? AppColors.primary.withValues(alpha: 0.2) : AppColors.primarySoft,

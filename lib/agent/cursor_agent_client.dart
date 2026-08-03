@@ -18,7 +18,7 @@ class CursorAgentClient {
   final http.Client _http;
 
   static const _pollInterval = Duration(seconds: 3);
-  static const _maxWait = Duration(minutes: 5);
+  static const _heartbeatInterval = Duration(minutes: 1);
 
   Map<String, String> get _headers => {
         'Authorization': 'Bearer $apiKey',
@@ -27,6 +27,9 @@ class CursorAgentClient {
       };
 
   /// Отправляет промпт агенту без репозитория и ждёт JSON-ответ.
+  ///
+  /// Ожидание без лимита по времени — большие периоды (месяц) могут
+  /// занимать 5+ минут. Прерывание только по ERROR / CANCELLED / EXPIRED.
   Future<String> completePrompt(String promptText) async {
     AppLog.instance.info(LogCategory.cursor, 'Создание cloud agent…');
     final createUri = Uri.parse('$baseUrl/v1/agents');
@@ -60,13 +63,28 @@ class CursorAgentClient {
 
     AppLog.instance.info(
       LogCategory.cursor,
-      'Ожидание ответа агента (run: $runId)…',
+      'Ожидание ответа агента (run: $runId, без таймаута)…',
     );
 
-    final deadline = DateTime.now().add(_maxWait);
+    final startedAt = DateTime.now();
     var lastStatus = '';
-    while (DateTime.now().isBefore(deadline)) {
+    var lastHeartbeat = startedAt;
+    while (true) {
       await Future<void>.delayed(_pollInterval);
+
+      final now = DateTime.now();
+      if (now.difference(lastHeartbeat) >= _heartbeatInterval) {
+        lastHeartbeat = now;
+        final waited = now.difference(startedAt);
+        final mins = waited.inMinutes;
+        final secs = waited.inSeconds % 60;
+        AppLog.instance.info(
+          LogCategory.cursor,
+          'Агент ещё работает… '
+          '$minsм ${secs.toString().padLeft(2, '0')}с'
+          '${lastStatus.isNotEmpty ? ' (статус: $lastStatus)' : ''}',
+        );
+      }
 
       final runUri = Uri.parse('$baseUrl/v1/agents/$agentId/runs/$runId');
       final runResp = await _http.get(runUri, headers: _headers);
@@ -84,7 +102,12 @@ class CursorAgentClient {
       }
 
       if (status == 'FINISHED') {
-        AppLog.instance.success(LogCategory.cursor, 'Ответ агента получен');
+        final waited = DateTime.now().difference(startedAt);
+        AppLog.instance.success(
+          LogCategory.cursor,
+          'Ответ агента получен '
+          '(${waited.inMinutes}м ${(waited.inSeconds % 60).toString().padLeft(2, '0')}с)',
+        );
         return runJson['result'] as String? ?? '';
       }
       if (status == 'ERROR' ||
@@ -93,8 +116,6 @@ class CursorAgentClient {
         throw CursorAgentException('Запуск агента завершился: $status');
       }
     }
-
-    throw CursorAgentException('Таймаут ожидания ответа Cursor Agent');
   }
 
   void close() => _http.close();

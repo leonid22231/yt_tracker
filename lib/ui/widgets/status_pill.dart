@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 
 /// Индикатор статуса подключения.
 class StatusPill extends StatelessWidget {
@@ -16,7 +17,34 @@ class StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = ok ? AppColors.success : AppColors.warning;
+    final p = context.palette;
+    final color = ok ? p.success : p.warning;
+
+    if (p.isOneC) {
+      return DecoratedBox(
+        decoration: OneCDecorations.raised(p),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: p.textPrimary),
+                ),
+              ),
+              Icon(
+                ok ? Icons.check_box : Icons.indeterminate_check_box,
+                size: 14,
+                color: color,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

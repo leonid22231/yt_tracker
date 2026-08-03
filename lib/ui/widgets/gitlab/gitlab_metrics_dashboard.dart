@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/gitlab/productivity_metric.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
 
 /// Сетка ключевых метрик периода.
@@ -132,79 +134,143 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final card = p.isOneC
+        ? _OneCMetricCard(data: data, palette: p)
+        : _GradientMetricCard(data: data);
+
+    if (data.onTap == null) return card;
+    return InkWell(onTap: data.onTap, child: card);
+  }
+}
+
+class _OneCMetricCard extends StatelessWidget {
+  const _OneCMetricCard({required this.data, required this.palette});
+
+  final _MetricData data;
+  final VariantPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: OneCDecorations.raised(palette),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(data.icon, size: 14, color: palette.textSecondary),
+                const Spacer(),
+                if (data.onTap != null)
+                  Icon(Icons.open_in_new, size: 12, color: palette.textMuted),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              data.value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: palette.textPrimary,
+              ),
+            ),
+            Text(
+              data.label,
+              style: TextStyle(fontSize: 10, color: palette.textSecondary),
+            ),
+            Text(
+              data.subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 9, color: palette.textMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GradientMetricCard extends StatelessWidget {
+  const _GradientMetricCard({required this.data});
+
+  final _MetricData data;
+
+  @override
+  Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: data.onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                data.gradient.first.withValues(alpha: 0.22),
-                data.gradient.last.withValues(alpha: 0.08),
-              ],
-            ),
-            border: Border.all(
-              color: data.gradient.first.withValues(alpha: 0.35),
-            ),
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              data.gradient.first.withValues(alpha: 0.22),
+              data.gradient.last.withValues(alpha: 0.08),
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: data.gradient.first.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(data.icon, size: 18, color: data.gradient.first),
+          border: Border.all(
+            color: data.gradient.first.withValues(alpha: 0.35),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: data.gradient.first.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const Spacer(),
-                    if (data.onTap != null)
-                      Icon(
-                        Icons.open_in_new_rounded,
-                        size: 14,
-                        color: AppColors.textMuted,
-                      ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  data.value,
-                  maxLines: data.compactValue ? 1 : 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: data.compactValue ? 15 : 22,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
+                    child: Icon(data.icon, size: 18, color: data.gradient.first),
                   ),
+                  const Spacer(),
+                  if (data.onTap != null)
+                    Icon(
+                      Icons.open_in_new_rounded,
+                      size: 14,
+                      color: AppColors.textMuted,
+                    ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                data.value,
+                maxLines: data.compactValue ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: data.compactValue ? 15 : 22,
+                  fontWeight: FontWeight.w800,
+                  height: 1.1,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  data.label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                data.label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  data.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                data.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+              ),
+            ],
           ),
         ),
       ),

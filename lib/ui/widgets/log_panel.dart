@@ -4,9 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtrack_timer/logging/log_entry.dart';
 import 'package:youtrack_timer/logging/log_level.dart';
 import 'package:youtrack_timer/providers/log_provider.dart';
+import 'package:youtrack_timer/ui/dialogs/paste_cursor_json_dialog.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 
-/// Панель журнала с фильтрами, цветами и копированием.
+/// Панель журнала сообщений.
 class LogPanel extends ConsumerStatefulWidget {
   const LogPanel({super.key});
 
@@ -35,6 +38,7 @@ class _LogPanelState extends ConsumerState<LogPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final entries = ref.watch(visibleLogEntriesProvider);
     final allEntries = ref.watch(logEntriesProvider);
     final minLevel = ref.watch(logMinLevelProvider);
@@ -47,15 +51,15 @@ class _LogPanelState extends ConsumerState<LogPanel> {
     }
 
     return Container(
-      height: 200,
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: p.isOneC ? p.formBackground : AppColors.background,
+        border: Border(top: BorderSide(color: p.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _LogToolbar(
+            palette: p,
             total: allEntries.length,
             visible: entries.length,
             minLevel: minLevel,
@@ -66,23 +70,33 @@ class _LogPanelState extends ConsumerState<LogPanel> {
               setState(() => _prevCount = 0);
             },
             onCopy: () => _copyAll(entries),
+            onSecretPasteJson: () => PasteCursorJsonDialog.show(context),
           ),
           Expanded(
             child: entries.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
-                      'Логи появятся при построении плана',
-                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                      'Сообщения появятся при работе',
+                      style: TextStyle(
+                        color: p.textMuted,
+                        fontSize: 11,
+                      ),
                     ),
                   )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                : DecoratedBox(
+                    decoration: p.isOneC
+                        ? OneCDecorations.sunken(p)
+                        : const BoxDecoration(),
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      itemCount: entries.length,
+                      itemBuilder: (_, i) =>
+                          _LogLine(entry: entries[i], palette: p),
                     ),
-                    itemCount: entries.length,
-                    itemBuilder: (_, i) => _LogLine(entry: entries[i]),
                   ),
           ),
         ],
@@ -101,47 +115,58 @@ class _LogPanelState extends ConsumerState<LogPanel> {
 
 class _LogToolbar extends StatelessWidget {
   const _LogToolbar({
+    required this.palette,
     required this.total,
     required this.visible,
     required this.minLevel,
     required this.onLevelChanged,
     required this.onClear,
     required this.onCopy,
+    required this.onSecretPasteJson,
   });
 
+  final VariantPalette palette;
   final int total;
   final int visible;
   final LogLevel minLevel;
   final ValueChanged<LogLevel> onLevelChanged;
   final VoidCallback onClear;
   final VoidCallback onCopy;
+  final VoidCallback onSecretPasteJson;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Row(
         children: [
-          const Icon(Icons.terminal, size: 16, color: Colors.white54),
-          const SizedBox(width: 8),
-          Text(
-            'Лог ($visible/$total)',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          GestureDetector(
+            onLongPress: onSecretPasteJson,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.article_outlined, size: 14, color: palette.textMuted),
+                const SizedBox(width: 6),
+                Text(
+                  'Журнал ($visible/$total)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: palette.textPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           DropdownButtonHideUnderline(
             child: DropdownButton<LogLevel>(
               value: minLevel,
               isDense: true,
-              style: const TextStyle(fontSize: 11, color: Colors.white70),
-              dropdownColor: const Color(0xFF2D3344),
+              style: TextStyle(fontSize: 10, color: palette.textSecondary),
+              dropdownColor: palette.panel,
               items: LogLevel.values
-                  .map(
-                    (l) => DropdownMenuItem(
-                      value: l,
-                      child: Text(l.label),
-                    ),
-                  )
+                  .map((l) => DropdownMenuItem(value: l, child: Text(l.label)))
                   .toList(),
               onChanged: (v) {
                 if (v != null) onLevelChanged(v);
@@ -150,13 +175,13 @@ class _LogToolbar extends StatelessWidget {
           ),
           const Spacer(),
           IconButton(
-            icon: const Icon(Icons.copy, size: 18),
+            icon: Icon(Icons.copy, size: 16, color: palette.textSecondary),
             tooltip: 'Копировать',
             onPressed: onCopy,
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18),
+            icon: Icon(Icons.delete_outline, size: 16, color: palette.textSecondary),
             tooltip: 'Очистить',
             onPressed: onClear,
             visualDensity: VisualDensity.compact,
@@ -168,55 +193,56 @@ class _LogToolbar extends StatelessWidget {
 }
 
 class _LogLine extends StatelessWidget {
-  const _LogLine({required this.entry});
+  const _LogLine({required this.entry, required this.palette});
 
   final LogEntry entry;
+  final VariantPalette palette;
 
   @override
   Widget build(BuildContext context) {
     final color = switch (entry.level) {
-      LogLevel.debug => Colors.white38,
-      LogLevel.info => Colors.white70,
-      LogLevel.success => const Color(0xFF81C784),
-      LogLevel.warn => const Color(0xFFFFB74D),
-      LogLevel.error => const Color(0xFFE57373),
+      LogLevel.debug => palette.textMuted,
+      LogLevel.info => palette.textSecondary,
+      LogLevel.success => palette.success,
+      LogLevel.warn => palette.warning,
+      LogLevel.error => palette.danger,
     };
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: SelectableText.rich(
         TextSpan(
           children: [
             TextSpan(
               text: '${entry.timeLabel} ',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Consolas',
-                fontSize: 11,
-                color: Colors.white30,
+                fontSize: 10,
+                color: palette.textMuted,
               ),
             ),
             TextSpan(
               text: '[${entry.level.label}] ',
               style: TextStyle(
                 fontFamily: 'Consolas',
-                fontSize: 11,
+                fontSize: 10,
                 color: color,
                 fontWeight: FontWeight.w600,
               ),
             ),
             TextSpan(
               text: '[${entry.category}] ',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Consolas',
-                fontSize: 11,
-                color: Color(0xFF7B5CFF),
+                fontSize: 10,
+                color: palette.accent,
               ),
             ),
             TextSpan(
               text: entry.message,
               style: TextStyle(
                 fontFamily: 'Consolas',
-                fontSize: 11,
+                fontSize: 10,
                 color: color,
               ),
             ),

@@ -5,11 +5,15 @@ import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/providers/design_variant_provider.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
 import 'package:youtrack_timer/ui/dialogs/confirm_write_dialog.dart';
+import 'package:youtrack_timer/ui/dialogs/paste_cursor_json_dialog.dart';
 import 'package:youtrack_timer/ui/layout/app_shell.dart';
 import 'package:youtrack_timer/ui/screens/gitlab_analysis_screen.dart';
 import 'package:youtrack_timer/ui/screens/plan_preview_screen.dart';
 import 'package:youtrack_timer/ui/screens/settings_screen.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/design_variant.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
+import 'package:youtrack_timer/ui/widgets/panel_resize_handle.dart';
 import 'package:youtrack_timer/ui/widgets/day_timeline_view.dart';
 import 'package:youtrack_timer/ui/widgets/home/home_sidebar.dart';
 import 'package:youtrack_timer/ui/widgets/home/home_status_bar.dart';
@@ -59,10 +63,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final home = ref.watch(homeProvider);
     final settings = ref.watch(settingsProvider);
     final isLarge = ref.watch(designVariantProvider).isLarge;
+    final palette = ref.watch(designVariantProvider).palette;
     final shell = ref.watch(shellLayoutProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isLarge ? palette.window : AppColors.background,
       body: settings.when(
         loading: () => const LoadingProgressScreen(
           operation: 'Загрузка',
@@ -84,6 +89,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 builder: (_) => const GitLabAnalysisScreen(),
               ),
             ),
+            onBuildFromJson: () => PasteCursorJsonDialog.show(context),
           ),
           topBar: Column(
             mainAxisSize: MainAxisSize.min,
@@ -91,6 +97,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             children: [
               HomeTopBar(
                 tabController: _tabs,
+                settings: s,
+                onBuild: () => ref.read(homeProvider.notifier).buildPlan(),
+                onBuildFromJson: () => PasteCursorJsonDialog.show(context),
+                onPreview: () => _preview(context),
+                onWrite: () => _write(context, s),
+                onGitLab: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const GitLabAnalysisScreen(),
+                  ),
+                ),
+                onSettings: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SettingsScreen(),
+                  ),
+                ),
                 onDetailsToggle: isLarge
                     ? () => ref
                         .read(shellLayoutProvider.notifier)
@@ -130,7 +151,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   children: [
                     PlanListView(plan: home.plan!),
                     Padding(
-                      padding: EdgeInsets.all(isLarge ? 12 : 16),
+                      padding: EdgeInsets.all(isLarge ? 0 : 16),
                       child: DayTimelineView(
                         timelines: home.plan!.dayTimelines,
                       ),
@@ -220,15 +241,16 @@ class _StatusStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = isLarge ? context.palette : null;
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: isLarge ? 16 : 20,
-        vertical: isLarge ? 8 : 12,
+        horizontal: isLarge ? 8 : 20,
+        vertical: isLarge ? 4 : 12,
       ),
       decoration: BoxDecoration(
-        color: isLarge ? AppColors.surfaceHigh : AppColors.primarySoft,
+        color: isLarge ? p!.formBackground : AppColors.primarySoft,
         border: isLarge
-            ? const Border(bottom: BorderSide(color: AppColors.border))
+            ? Border(bottom: BorderSide(color: p!.border))
             : null,
       ),
       child: home.isLoading && home.loadingProgress != null
@@ -238,7 +260,10 @@ class _StatusStrip extends StatelessWidget {
             )
           : Text(
               home.statusMessage,
-              style: TextStyle(fontSize: isLarge ? 12 : 13),
+              style: TextStyle(
+                fontSize: isLarge ? 11 : 13,
+                color: isLarge ? p!.textPrimary : null,
+              ),
             ),
     );
   }
@@ -252,13 +277,12 @@ class _AiInsightBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = isLarge ? context.palette : null;
     return Container(
-      margin: EdgeInsets.fromLTRB(isLarge ? 12 : 16, 8, isLarge ? 12 : 16, 0),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.fromLTRB(isLarge ? 8 : 16, 4, isLarge ? 8 : 16, 0),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isLarge
-            ? AppColors.surfaceHigh
-            : null,
+        color: isLarge ? p!.formBackground : null,
         gradient: isLarge
             ? null
             : LinearGradient(
@@ -267,11 +291,8 @@ class _AiInsightBanner extends StatelessWidget {
                   AppColors.accent.withValues(alpha: 0.08),
                 ],
               ),
-        borderRadius: BorderRadius.circular(isLarge ? 4 : 14),
         border: Border.all(
-          color: isLarge
-              ? AppColors.border
-              : AppColors.primary.withValues(alpha: 0.3),
+          color: isLarge ? p!.border : AppColors.primary.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
@@ -279,16 +300,17 @@ class _AiInsightBanner extends StatelessWidget {
         children: [
           Icon(
             Icons.auto_awesome,
-            color: AppColors.accent,
-            size: isLarge ? 16 : 20,
+            color: isLarge ? p!.accent : AppColors.accent,
+            size: isLarge ? 14 : 20,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
-                fontSize: isLarge ? 12 : 13,
+                fontSize: isLarge ? 11 : 13,
                 height: 1.4,
+                color: isLarge ? p!.textPrimary : null,
               ),
             ),
           ),
@@ -305,44 +327,50 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = isLarge ? context.palette : null;
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
+        constraints: const BoxConstraints(maxWidth: 400),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: EdgeInsets.all(isLarge ? 20 : 24),
+            DecoratedBox(
               decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                shape: BoxShape.circle,
-                border: isLarge
-                    ? Border.all(color: AppColors.border)
-                    : null,
+                border: Border.all(
+                  color: isLarge ? p!.border : AppColors.border,
+                ),
+                color: isLarge ? p!.panel : AppColors.surfaceHigh,
               ),
-              child: Icon(
-                Icons.insights_rounded,
-                size: isLarge ? 40 : 48,
-                color: AppColors.primary,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Icon(
+                  Icons.table_chart_outlined,
+                  size: 40,
+                  color: isLarge ? p!.textMuted : AppColors.textMuted,
+                ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Text(
-              'План ещё не построен',
+              'План ещё не сформирован',
               style: TextStyle(
-                fontSize: isLarge ? 18 : 20,
+                fontSize: isLarge ? 14 : 20,
                 fontWeight: FontWeight.w700,
+                color: isLarge ? p!.textPrimary : null,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Укажите период слева и нажмите «Построить план». '
-              'Cursor Agent оценит задачи, затем вы сможете подкрутить '
-              'время слайдерами по каждому дню.',
+              isLarge
+                  ? 'Укажите период в левой панели и нажмите «Сформировать» '
+                      'на панели инструментов.'
+                  : 'Укажите период слева и нажмите «Построить план». '
+                      'Cursor Agent оценит задачи, затем вы сможете подкрутить '
+                      'время слайдерами по каждому дню.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: isLarge ? 13 : 13,
-                color: AppColors.textSecondary,
+                fontSize: 13,
+                color: isLarge ? p!.textSecondary : AppColors.textSecondary,
                 height: 1.45,
               ),
             ),
@@ -353,7 +381,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _LogSection extends StatelessWidget {
+class _LogSection extends ConsumerWidget {
   const _LogSection({
     required this.expanded,
     required this.isLarge,
@@ -365,42 +393,125 @@ class _LogSection extends StatelessWidget {
   final VoidCallback onToggle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final shell = ref.watch(shellLayoutProvider);
+    final logHeight = shell.logPanelHeight;
+    final viewportMax = MediaQuery.sizeOf(context).height * 0.65;
+    final maxHeight = viewportMax.clamp(
+      ShellLayoutState.logPanelHeightMin,
+      ShellLayoutState.logPanelHeightMax,
+    );
+
+    void resizeBy(double delta) {
+      ref.read(shellLayoutProvider.notifier).setLogPanelHeight(
+            (logHeight - delta).clamp(
+              ShellLayoutState.logPanelHeightMin,
+              maxHeight,
+            ),
+          );
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (expanded)
+          PanelResizeHandle(
+            palette: p,
+            axis: Axis.vertical,
+            onDrag: resizeBy,
+          ),
         Material(
-          color: AppColors.surfaceHigh,
+          color: isLarge ? p.toolbar : AppColors.surfaceHigh,
           child: InkWell(
             onTap: onToggle,
-            child: Padding(
+            child: Container(
+              decoration: isLarge
+                  ? BoxDecoration(
+                      border: Border(
+                        top: expanded
+                            ? BorderSide.none
+                            : BorderSide(color: p.border),
+                      ),
+                    )
+                  : null,
               padding: EdgeInsets.symmetric(
-                horizontal: isLarge ? 12 : 16,
-                vertical: isLarge ? 6 : 8,
+                horizontal: isLarge ? 8 : 16,
+                vertical: isLarge ? 4 : 8,
               ),
               child: Row(
                 children: [
                   Icon(
                     expanded ? Icons.expand_more : Icons.expand_less,
-                    size: 16,
-                    color: AppColors.textMuted,
+                    size: 14,
+                    color: isLarge ? p.textMuted : AppColors.textMuted,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Журнал',
-                    style: TextStyle(
-                      fontSize: isLarge ? 11 : 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
-                      letterSpacing: isLarge ? 0.4 : 0,
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Журнал сообщений',
+                      style: TextStyle(
+                        fontSize: isLarge ? 11 : 12,
+                        fontWeight: FontWeight.w600,
+                        color: isLarge
+                            ? p.textSecondary
+                            : AppColors.textSecondary,
+                      ),
                     ),
                   ),
+                  if (expanded) ...[
+                    Text(
+                      '${logHeight.round()} px',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isLarge ? p.textMuted : AppColors.textMuted,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.remove,
+                        size: 14,
+                        color: isLarge ? p.textSecondary : AppColors.textSecondary,
+                      ),
+                      tooltip: 'Уменьшить',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      onPressed: logHeight <= ShellLayoutState.logPanelHeightMin
+                          ? null
+                          : () => resizeBy(40),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.add,
+                        size: 14,
+                        color: isLarge ? p.textSecondary : AppColors.textSecondary,
+                      ),
+                      tooltip: 'Увеличить',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      onPressed: logHeight >= maxHeight
+                          ? null
+                          : () => resizeBy(-40),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
         ),
-        if (expanded) const LogPanel(),
+        if (expanded)
+          SizedBox(
+            height: logHeight,
+            child: const LogPanel(),
+          ),
       ],
     );
   }

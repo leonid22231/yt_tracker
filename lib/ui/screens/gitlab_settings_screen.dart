@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
+import 'package:youtrack_timer/providers/design_variant_provider.dart';
 import 'package:youtrack_timer/providers/gitlab_provider.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
+import 'package:youtrack_timer/ui/layout/variant_scaffold.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/widgets/business/one_c_title_bar.dart';
 import 'package:youtrack_timer/ui/widgets/loading_progress_view.dart';
 
 /// Настройки подключения GitLab.
@@ -95,16 +98,23 @@ class _GitLabSettingsScreenState extends ConsumerState<GitLabSettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final gitLab = ref.watch(gitLabProvider);
+    final isLarge = ref.watch(designVariantProvider).isLarge;
+    final p = ref.watch(designVariantProvider).palette;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('GitLab'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+    return VariantScaffold(
+      title: 'GitLab',
+      subtitle: 'Настройки подключения',
+      toolbarActions: isLarge
+          ? [
+              OneCToolbarButton(
+                palette: p,
+                label: 'Сохранить',
+                icon: Icons.save_outlined,
+                emphasis: true,
+                onPressed: _save,
+              ),
+            ]
+          : null,
       body: settings.when(
         loading: () => const LoadingProgressScreen(
           operation: 'GitLab',
@@ -114,18 +124,16 @@ class _GitLabSettingsScreenState extends ConsumerState<GitLabSettingsScreen> {
         data: (s) {
           _bind(s);
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(isLarge ? 8 : 20),
             children: [
-              _SectionCard(
+              VariantSectionCard(
                 icon: Icons.hub_outlined,
                 title: 'Подключение GitLab',
                 children: [
-                  const Text(
-                    'Personal Access Token с правами read_api и read_repository. '
-                    'Токен хранится локально и не попадает в логи.',
-                    style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  const VariantHintText(
+                    'Personal Access Token с правами read_api и read_repository.',
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _urlCtrl,
                     decoration: const InputDecoration(
@@ -133,7 +141,7 @@ class _GitLabSettingsScreenState extends ConsumerState<GitLabSettingsScreen> {
                       hintText: 'https://gitlab.com',
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _tokenCtrl,
                     obscureText: true,
@@ -142,10 +150,10 @@ class _GitLabSettingsScreenState extends ConsumerState<GitLabSettingsScreen> {
                       hintText: 'glpat-…',
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   if (gitLab.isValidating && gitLab.loadingProgress != null)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.only(bottom: 10),
                       child: LoadingProgressView(
                         progress: gitLab.loadingProgress,
                         layout: LoadingProgressLayout.panel,
@@ -153,25 +161,25 @@ class _GitLabSettingsScreenState extends ConsumerState<GitLabSettingsScreen> {
                     ),
                   OutlinedButton.icon(
                     onPressed: gitLab.isValidating ? null : _testConnection,
-                    icon: const Icon(Icons.wifi_tethering),
+                    icon: const Icon(Icons.wifi_tethering, size: 16),
                     label: Text(
-                      gitLab.isValidating
-                          ? 'Проверка…'
-                          : 'Проверить подключение',
+                      gitLab.isValidating ? 'Проверка…' : 'Проверить подключение',
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              _SectionCard(
+              SizedBox(height: isLarge ? 8 : 16),
+              VariantSectionCard(
                 icon: Icons.science_outlined,
                 title: 'Демо-режим',
                 children: [
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Использовать мок-данные'),
+                    dense: true,
+                    title: const Text('Использовать мок-данные', style: TextStyle(fontSize: 12)),
                     subtitle: const Text(
-                      'Проверить интерфейс аналитики без реального token',
+                      'Проверить интерфейс без реального token',
+                      style: TextStyle(fontSize: 10),
                     ),
                     value: _demoMode,
                     onChanged: (v) => setState(() => _demoMode = v),
@@ -179,19 +187,13 @@ class _GitLabSettingsScreenState extends ConsumerState<GitLabSettingsScreen> {
                 ],
               ),
               if (gitLab.user != null) ...[
-                const SizedBox(height: 16),
-                _SectionCard(
+                SizedBox(height: isLarge ? 8 : 16),
+                VariantSectionCard(
                   icon: Icons.person_outline,
                   title: 'Статус',
                   children: [
-                    _StatusRow(
-                      label: 'Пользователь',
-                      value: gitLab.user!.displayName,
-                    ),
-                    _StatusRow(
-                      label: 'Username',
-                      value: '@${gitLab.user!.username}',
-                    ),
+                    _StatusRow(label: 'Пользователь', value: gitLab.user!.displayName),
+                    _StatusRow(label: 'Username', value: '@${gitLab.user!.username}'),
                     if (gitLab.activity != null) ...[
                       _StatusRow(
                         label: 'Коммитов',
@@ -201,56 +203,14 @@ class _GitLabSettingsScreenState extends ConsumerState<GitLabSettingsScreen> {
                         label: 'Веток',
                         value: '${gitLab.activity!.branches.length}',
                       ),
-                      if (gitLab.activity!.projectCount > 0)
-                        _StatusRow(
-                          label: 'Проектов',
-                          value: '${gitLab.activity!.projectCount}',
-                        ),
                     ],
-                    if (gitLab.statusMessage.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          gitLab.statusMessage,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.success,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ],
-              if (gitLab.errorMessage.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: AppColors.danger.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline, color: AppColors.danger),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          gitLab.errorMessage,
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              if (!isLarge) ...[
+                const SizedBox(height: 24),
+                FilledButton(onPressed: _save, child: const Text('Сохранить')),
               ],
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _save,
-                child: const Text('Сохранить'),
-              ),
             ],
           );
         },
@@ -259,70 +219,27 @@ class _GitLabSettingsScreenState extends ConsumerState<GitLabSettingsScreen> {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.icon,
-    required this.title,
-    required this.children,
-  });
-
-  final IconData icon;
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: AppColors.primary, size: 22),
-                const SizedBox(width: 10),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusRow extends StatelessWidget {
+class _StatusRow extends ConsumerWidget {
   const _StatusRow({required this.label, required this.value});
 
   final String label;
   final String value;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(designVariantProvider).palette;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          Text(
-            '$label: ',
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
+          SizedBox(
+            width: 100,
+            child: Text(label, style: TextStyle(fontSize: 11, color: p.textSecondary)),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: p.textPrimary),
             ),
           ),
         ],

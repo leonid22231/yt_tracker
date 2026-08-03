@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 
-/// Тёмная тема YouTrack Timer.
+/// Тема приложения.
 class AppTheme {
   static ThemeData dark() {
     final base = ThemeData(
@@ -132,6 +133,84 @@ class AppTheme {
           border: Border.all(color: AppColors.border),
         ),
         textStyle: textTheme.bodySmall,
+      ),
+    );
+  }
+
+  /// Светлая тема 1С для desktop large.
+  static ThemeData oneC() {
+    const p = VariantPalette.oneC;
+    final base = ThemeData(
+      useMaterial3: false,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: p.window,
+      fontFamily: 'Segoe UI',
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF0A246A),
+        onPrimary: Colors.white,
+        surface: Color(0xFFFFFAD5),
+        onSurface: Color(0xFF000000),
+        outline: Color(0xFF808080),
+        error: Color(0xFFCC0000),
+      ),
+      dividerColor: p.border,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+    );
+
+    return base.copyWith(
+      extensions: const [VariantPaletteTheme(VariantPalette.oneC)],
+      textTheme: base.textTheme.apply(
+        bodyColor: p.textPrimary,
+        displayColor: p.textPrimary,
+      ),
+      iconTheme: const IconThemeData(color: Color(0xFF000000), size: 16),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: p.inputBackground,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: p.borderShadow, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: p.borderShadow, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: p.accent, width: 1),
+        ),
+        hintStyle: TextStyle(color: p.textMuted, fontSize: 12),
+      ),
+      tabBarTheme: const TabBarThemeData(
+        indicatorSize: TabBarIndicatorSize.label,
+        dividerColor: Color(0xFF808080),
+        labelColor: Color(0xFF000000),
+        unselectedLabelColor: Color(0xFF666666),
+        indicatorColor: Color(0xFF0A246A),
+        labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+      dataTableTheme: DataTableThemeData(
+        headingRowColor: WidgetStateProperty.all(p.tableHeader),
+        dataRowColor: WidgetStateProperty.all(p.tableRow),
+        headingTextStyle: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: p.textPrimary,
+        ),
+        dataTextStyle: TextStyle(fontSize: 11, color: p.textPrimary),
+        dividerThickness: 1,
+        horizontalMargin: 8,
+        columnSpacing: 0,
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: p.panel,
+          border: Border.all(color: p.border),
+        ),
+        textStyle: TextStyle(fontSize: 11, color: p.textPrimary),
       ),
     );
   }

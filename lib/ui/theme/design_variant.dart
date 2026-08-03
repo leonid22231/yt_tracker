@@ -1,10 +1,11 @@
 import 'package:youtrack_timer/ui/theme/design_tokens.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 
 /// Предпочитаемый режим оформления (сохраняется в настройках).
 enum DesignModePreference {
   auto('auto', 'Авто', 'По ширине окна'),
   current('current', 'Планшетный', 'Текущий компактный интерфейс'),
-  large('large', 'Десктоп', 'Многоколоночный рабочий стол');
+  large('large', 'Desktop Large', 'Интерфейс 1С для больших экранов');
 
   const DesignModePreference(this.storageKey, this.label, this.description);
 
@@ -32,6 +33,7 @@ class DesignVariantContext {
     required this.variant,
     required this.preference,
     required this.tokens,
+    required this.palette,
     required this.windowWidth,
     required this.isAutoResolved,
   });
@@ -39,6 +41,7 @@ class DesignVariantContext {
   final DesignVariant variant;
   final DesignModePreference preference;
   final VariantTokens tokens;
+  final VariantPalette palette;
   final double windowWidth;
   final bool isAutoResolved;
 
@@ -84,6 +87,9 @@ class DesignVariantContext {
       tokens: variant == DesignVariant.large
           ? VariantTokens.large
           : VariantTokens.current,
+      palette: variant == DesignVariant.large
+          ? VariantPalette.oneC
+          : VariantPalette.dark,
       windowWidth: width,
       isAutoResolved: preference == DesignModePreference.auto,
     );
@@ -98,6 +104,7 @@ class ShellLayoutState {
     this.detailsPanelWidth = 360,
     this.detailsPanelOpen = true,
     this.logExpanded = true,
+    this.logPanelHeight = 180,
     this.activeTabIndex = 0,
     this.selectedIssueId,
     this.expandedIssueIds = const {},
@@ -112,11 +119,16 @@ class ShellLayoutState {
     },
   });
 
+  static const logPanelHeightMin = 72.0;
+  static const logPanelHeightDefault = 180.0;
+  static const logPanelHeightMax = 520.0;
+
   final bool leftNavExpanded;
   final double leftNavWidth;
   final double detailsPanelWidth;
   final bool detailsPanelOpen;
   final bool logExpanded;
+  final double logPanelHeight;
   final int activeTabIndex;
   final String? selectedIssueId;
   final Set<String> expandedIssueIds;
@@ -128,6 +140,7 @@ class ShellLayoutState {
     double? detailsPanelWidth,
     bool? detailsPanelOpen,
     bool? logExpanded,
+    double? logPanelHeight,
     int? activeTabIndex,
     String? selectedIssueId,
     Set<String>? expandedIssueIds,
@@ -139,6 +152,7 @@ class ShellLayoutState {
         detailsPanelWidth: detailsPanelWidth ?? this.detailsPanelWidth,
         detailsPanelOpen: detailsPanelOpen ?? this.detailsPanelOpen,
         logExpanded: logExpanded ?? this.logExpanded,
+        logPanelHeight: logPanelHeight ?? this.logPanelHeight,
         activeTabIndex: activeTabIndex ?? this.activeTabIndex,
         selectedIssueId: selectedIssueId ?? this.selectedIssueId,
         expandedIssueIds: expandedIssueIds ?? this.expandedIssueIds,
@@ -151,6 +165,7 @@ class ShellLayoutState {
         'detailsPanelWidth': detailsPanelWidth,
         'detailsPanelOpen': detailsPanelOpen,
         'logExpanded': logExpanded,
+        'logPanelHeight': logPanelHeight,
         'activeTabIndex': activeTabIndex,
         'selectedIssueId': selectedIssueId,
         'expandedIssueIds': expandedIssueIds.toList(),
@@ -165,6 +180,8 @@ class ShellLayoutState {
             (json['detailsPanelWidth'] as num?)?.toDouble() ?? 360,
         detailsPanelOpen: json['detailsPanelOpen'] as bool? ?? true,
         logExpanded: json['logExpanded'] as bool? ?? true,
+        logPanelHeight: (json['logPanelHeight'] as num?)?.toDouble() ??
+            ShellLayoutState.logPanelHeightDefault,
         activeTabIndex: json['activeTabIndex'] as int? ?? 0,
         selectedIssueId: json['selectedIssueId'] as String?,
         expandedIssueIds: (json['expandedIssueIds'] as List<dynamic>?)

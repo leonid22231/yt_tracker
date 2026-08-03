@@ -9,7 +9,11 @@ import 'package:youtrack_timer/models/gitlab/gitlab_activity_data.dart';
 import 'package:youtrack_timer/models/gitlab/merge_request_record.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/services/gitlab/gitlab_day_analyzer.dart';
+import 'package:youtrack_timer/providers/design_variant_provider.dart';
+import 'package:youtrack_timer/ui/layout/variant_scaffold.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_ai_summary_panel.dart';
 import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
@@ -35,6 +39,22 @@ class GitLabDayDetailScreen extends ConsumerWidget {
     final baseUrl = activity.gitLabBaseUrl;
     final youTrackBaseUrl = ref.watch(settingsProvider).valueOrNull?.youTrackUrl;
     final dateLabel = DateFormat('EEEE, d MMMM yyyy', 'ru').format(detail.date);
+    final isLarge = ref.watch(designVariantProvider).isLarge;
+
+    final content = _DayDetailContent(
+      detail: detail,
+      date: date,
+      baseUrl: baseUrl,
+      youTrackBaseUrl: youTrackBaseUrl,
+    );
+
+    if (isLarge) {
+      return VariantScaffold(
+        title: 'GitLab · День',
+        subtitle: dateLabel,
+        body: content,
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -96,108 +116,135 @@ class GitLabDayDetailScreen extends ConsumerWidget {
           ),
           SliverPadding(
             padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                GitLabAiSummaryPanel(day: date, compact: true),
-                const SizedBox(height: 16),
-                if (detail.isActive) ...[
-                  _HeroStats(detail: detail),
-                  const SizedBox(height: 16),
-                  if (detail.projects.isNotEmpty) ...[
-                    _SectionTitle(
-                      icon: Icons.folder_outlined,
-                      title: 'Проекты',
-                      count: detail.projects.length,
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final p in detail.projects)
-                          _LinkChip(
-                            label: p,
-                            onTap: baseUrl.isNotEmpty
-                                ? () => openExternalUrl(
-                                      GitLabLinks.projectUrl(baseUrl, p),
-                                    )
-                                : null,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (detail.summary.taskIds.isNotEmpty) ...[
-                    _SectionTitle(
-                      icon: Icons.task_alt_outlined,
-                      title: 'Задачи',
-                      count: detail.summary.taskIds.length,
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final id in detail.summary.taskIds)
-                          YouTrackIssueChip(
-                            issueIdReadable: id,
-                            baseUrl: youTrackBaseUrl,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (detail.mergeRequests.isNotEmpty) ...[
-                    _SectionTitle(
-                      icon: Icons.merge_type_rounded,
-                      title: 'Merge requests',
-                      count: detail.mergeRequests.length,
-                    ),
-                    const SizedBox(height: 8),
-                    for (final mr in detail.mergeRequests)
-                      _MergeRequestTile(
-                        mr: mr,
-                        baseUrl: baseUrl,
-                        youTrackBaseUrl: youTrackBaseUrl,
-                      ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (detail.commits.isNotEmpty) ...[
-                    _SectionTitle(
-                      icon: Icons.call_merge_rounded,
-                      title: 'Коммиты',
-                      count: detail.commits.length,
-                    ),
-                    const SizedBox(height: 8),
-                    for (final c in detail.commits)
-                      _CommitTile(
-                        commit: c,
-                        baseUrl: baseUrl,
-                        youTrackBaseUrl: youTrackBaseUrl,
-                      ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (detail.branches.isNotEmpty) ...[
-                    _SectionTitle(
-                      icon: Icons.account_tree_outlined,
-                      title: 'Ветки',
-                      count: detail.branches.length,
-                    ),
-                    const SizedBox(height: 8),
-                    for (final b in detail.branches)
-                      _BranchTile(
-                        branch: b,
-                        baseUrl: baseUrl,
-                        youTrackBaseUrl: youTrackBaseUrl,
-                      ),
-                  ],
-                ] else
-                  _EmptyDayCard(date: detail.date),
-              ]),
-            ),
+            sliver: SliverToBoxAdapter(child: content),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DayDetailContent extends StatelessWidget {
+  const _DayDetailContent({
+    required this.detail,
+    required this.date,
+    required this.baseUrl,
+    required this.youTrackBaseUrl,
+  });
+
+  final GitLabDayDetail detail;
+  final DateTime date;
+  final String baseUrl;
+  final String? youTrackBaseUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final pad = p.isOneC ? 8.0 : 16.0;
+    final isLarge = p.isOneC;
+
+    return ListView(
+      padding: EdgeInsets.all(pad),
+      primary: false,
+      shrinkWrap: !isLarge,
+      physics: isLarge ? null : const NeverScrollableScrollPhysics(),
+      children: [
+        GitLabAiSummaryPanel(day: date, compact: true),
+        SizedBox(height: p.isOneC ? 8 : 16),
+        if (detail.isActive) ...[
+          _HeroStats(detail: detail),
+          SizedBox(height: p.isOneC ? 8 : 16),
+          if (detail.projects.isNotEmpty) ...[
+            _SectionTitle(
+              icon: Icons.folder_outlined,
+              title: 'Проекты',
+              count: detail.projects.length,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final proj in detail.projects)
+                  _LinkChip(
+                    label: proj,
+                    onTap: baseUrl.isNotEmpty
+                        ? () => openExternalUrl(
+                              GitLabLinks.projectUrl(baseUrl, proj),
+                            )
+                        : null,
+                  ),
+              ],
+            ),
+            SizedBox(height: p.isOneC ? 12 : 20),
+          ],
+          if (detail.summary.taskIds.isNotEmpty) ...[
+            _SectionTitle(
+              icon: Icons.task_alt_outlined,
+              title: 'Задачи',
+              count: detail.summary.taskIds.length,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final id in detail.summary.taskIds)
+                  YouTrackIssueChip(
+                    issueIdReadable: id,
+                    baseUrl: youTrackBaseUrl,
+                  ),
+              ],
+            ),
+            SizedBox(height: p.isOneC ? 12 : 20),
+          ],
+          if (detail.mergeRequests.isNotEmpty) ...[
+            _SectionTitle(
+              icon: Icons.merge_type_rounded,
+              title: 'Merge requests',
+              count: detail.mergeRequests.length,
+            ),
+            const SizedBox(height: 8),
+            for (final mr in detail.mergeRequests)
+              _MergeRequestTile(
+                mr: mr,
+                baseUrl: baseUrl,
+                youTrackBaseUrl: youTrackBaseUrl,
+              ),
+            SizedBox(height: p.isOneC ? 12 : 20),
+          ],
+          if (detail.commits.isNotEmpty) ...[
+            _SectionTitle(
+              icon: Icons.call_merge_rounded,
+              title: 'Коммиты',
+              count: detail.commits.length,
+            ),
+            const SizedBox(height: 8),
+            for (final c in detail.commits)
+              _CommitTile(
+                commit: c,
+                baseUrl: baseUrl,
+                youTrackBaseUrl: youTrackBaseUrl,
+              ),
+            SizedBox(height: p.isOneC ? 12 : 20),
+          ],
+          if (detail.branches.isNotEmpty) ...[
+            _SectionTitle(
+              icon: Icons.account_tree_outlined,
+              title: 'Ветки',
+              count: detail.branches.length,
+            ),
+            const SizedBox(height: 8),
+            for (final b in detail.branches)
+              _BranchTile(
+                branch: b,
+                baseUrl: baseUrl,
+                youTrackBaseUrl: youTrackBaseUrl,
+              ),
+          ],
+        ] else
+          _EmptyDayCard(date: detail.date),
+      ],
     );
   }
 }
@@ -209,16 +256,19 @@ class _HeroStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final s = detail.summary;
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          colors: [AppColors.card, AppColors.card.withValues(alpha: 0.7)],
-        ),
-        border: Border.all(color: AppColors.border),
-      ),
-      padding: const EdgeInsets.all(16),
+      decoration: p.isOneC
+          ? OneCDecorations.raised(p)
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: LinearGradient(
+                colors: [AppColors.card, AppColors.card.withValues(alpha: 0.7)],
+              ),
+              border: Border.all(color: AppColors.border),
+            ),
+      padding: EdgeInsets.all(p.isOneC ? 10 : 16),
       child: Row(
         children: [
           _ScoreRing(score: s.productivityScore),
@@ -262,11 +312,12 @@ class _ScoreRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final color = score >= 60
-        ? AppColors.success
+        ? p.success
         : score >= 30
-            ? AppColors.warning
-            : AppColors.textMuted;
+            ? p.warning
+            : p.textMuted;
     final t = (score / 100).clamp(0.0, 1.0);
 
     return SizedBox(
@@ -281,7 +332,7 @@ class _ScoreRing extends StatelessWidget {
             child: CircularProgressIndicator(
               value: t,
               strokeWidth: 8,
-              backgroundColor: AppColors.surfaceHigh,
+              backgroundColor: p.isOneC ? p.panelHeader : AppColors.surfaceHigh,
               color: color,
             ),
           ),
@@ -296,9 +347,9 @@ class _ScoreRing extends StatelessWidget {
                   color: color,
                 ),
               ),
-              const Text(
+              Text(
                 'score',
-                style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                style: TextStyle(fontSize: 10, color: p.textMuted),
               ),
             ],
           ),
@@ -316,6 +367,16 @@ class _StatPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    if (p.isOneC) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 6, bottom: 4),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 11, color: p.textSecondary),
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -348,27 +409,41 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppColors.primary),
+        Icon(icon, size: 16, color: p.link),
         const SizedBox(width: 8),
-        Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            '$count',
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
-            ),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: p.isOneC ? 12 : 15,
+            fontWeight: FontWeight.w700,
+            color: p.textPrimary,
           ),
         ),
+        const SizedBox(width: 8),
+        if (p.isOneC)
+          Text(
+            '($count)',
+            style: TextStyle(fontSize: 11, color: p.textMuted),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -387,6 +462,7 @@ class _MergeRequestTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final url = mr.webUrl.isNotEmpty
         ? mr.webUrl
         : (baseUrl.isNotEmpty
@@ -398,14 +474,17 @@ class _MergeRequestTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(mr.reference,
-              style: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: p.link)),
           const SizedBox(height: 4),
           Text(mr.title,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: p.textPrimary)),
           const SizedBox(height: 8),
           Text('${mr.sourceBranch} → ${mr.targetBranch}',
-              style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+              style: TextStyle(fontSize: 11, color: p.textMuted)),
           if (mr.taskIds.isNotEmpty) ...[
             const SizedBox(height: 8),
             YouTrackIssueChipList(
@@ -446,6 +525,7 @@ class _CommitTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final url = commit.webUrl.isNotEmpty
         ? commit.webUrl
         : (baseUrl.isNotEmpty && commit.id.isNotEmpty
@@ -459,8 +539,10 @@ class _CommitTile extends StatelessWidget {
           Row(
             children: [
               Text(commit.shortId,
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontWeight: FontWeight.w700)),
+                  style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w700,
+                      color: p.textPrimary)),
               const Spacer(),
               if (url.isNotEmpty)
                 IconButton(
@@ -470,10 +552,10 @@ class _CommitTile extends StatelessWidget {
             ],
           ),
           Text(commit.message.split('\n').first,
-              style: const TextStyle(fontSize: 13)),
+              style: TextStyle(fontSize: 13, color: p.textPrimary)),
           const SizedBox(height: 6),
           Text(commit.projectName,
-              style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+              style: TextStyle(fontSize: 11, color: p.textMuted)),
           if (commit.taskIds.isNotEmpty) ...[
             const SizedBox(height: 6),
             YouTrackIssueChipList(
@@ -483,7 +565,7 @@ class _CommitTile extends StatelessWidget {
           ],
           if (commit.mergeRequestIid != null)
             Text('MR !${commit.mergeRequestIid}',
-                style: const TextStyle(fontSize: 11, color: AppColors.accent)),
+                style: TextStyle(fontSize: 11, color: p.planned)),
           Row(
             children: [
               Text('+${commit.additions}/−${commit.deletions}',
@@ -520,6 +602,7 @@ class _BranchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final url = baseUrl.isNotEmpty
         ? GitLabLinks.branchUrl(baseUrl, branch.projectName, branch.name)
         : '';
@@ -532,10 +615,10 @@ class _BranchTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(branch.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, color: p.textPrimary)),
                 Text(branch.projectName,
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textMuted)),
+                    style: TextStyle(fontSize: 11, color: p.textMuted)),
                 if (branch.taskIds.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   YouTrackIssueChipList(
@@ -564,14 +647,17 @@ class _ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
+      margin: EdgeInsets.only(bottom: p.isOneC ? 6 : 10),
+      padding: EdgeInsets.all(p.isOneC ? 8 : 14),
+      decoration: p.isOneC
+          ? OneCDecorations.flatPanel(p)
+          : BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
       child: child,
     );
   }
@@ -585,6 +671,20 @@ class _LinkChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    if (p.isOneC) {
+      return InkWell(
+        onTap: onTap,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: onTap != null ? p.link : p.textSecondary,
+            decoration: onTap != null ? TextDecoration.underline : null,
+          ),
+        ),
+      );
+    }
     return ActionChip(
       label: Text(label, style: const TextStyle(fontSize: 11)),
       onPressed: onTap,
@@ -600,12 +700,13 @@ class _EmptyDayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(p.isOneC ? 16 : 32),
       alignment: Alignment.center,
       child: Text(
         'В ${DateFormat('d MMMM', 'ru').format(date)} нет активности',
-        style: const TextStyle(color: AppColors.textSecondary),
+        style: TextStyle(color: p.textSecondary),
       ),
     );
   }

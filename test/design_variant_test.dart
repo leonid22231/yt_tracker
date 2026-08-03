@@ -54,6 +54,7 @@ void main() {
         leftNavExpanded: false,
         leftNavWidth: 200,
         detailsPanelWidth: 400,
+        logPanelHeight: 240,
         activeTabIndex: 1,
         selectedIssueId: 'PROJ-42',
         expandedIssueIds: {'PROJ-42'},
@@ -62,6 +63,7 @@ void main() {
           ShellLayoutState.fromJson(original.toJson());
       expect(restored.leftNavExpanded, false);
       expect(restored.leftNavWidth, 200);
+      expect(restored.logPanelHeight, 240);
       expect(restored.selectedIssueId, 'PROJ-42');
       expect(restored.expandedIssueIds, {'PROJ-42'});
     });

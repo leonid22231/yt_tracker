@@ -18,7 +18,7 @@ import 'package:youtrack_timer/youtrack/youtrack_client.dart';
 /// Сборка плана: AI (Cursor) или равномерное распределение.
 class PlanBuilderService {
   PlanBuilderService({
-    required YouTrackClient youTrackClient,
+    YouTrackClient? youTrackClient,
     CursorAgentClient? cursorClient,
     int minutesPerWorkDay = TimeDistributor.defaultMinutesPerWorkDay,
   })  : _youTrack = youTrackClient,
@@ -26,17 +26,25 @@ class PlanBuilderService {
         _minutesPerWorkDay = minutesPerWorkDay,
         _distributor = TimeDistributor(minutesPerWorkDay: minutesPerWorkDay);
 
-  final YouTrackClient _youTrack;
+  final YouTrackClient? _youTrack;
   final CursorAgentClient? _cursor;
   final int _minutesPerWorkDay;
   final TimeDistributor _distributor;
+
+  YouTrackClient get _yt {
+    final client = _youTrack;
+    if (client == null) {
+      throw StateError('YouTrackClient не задан');
+    }
+    return client;
+  }
 
   /// Загружает задачи за период.
   Future<List<YouTrackIssue>> loadIssues(
     DateTime start,
     DateTime end,
   ) =>
-      _youTrack.fetchAssignedIssues(startDate: start, endDate: end);
+      _yt.fetchAssignedIssues(startDate: start, endDate: end);
 
   /// Строит план с AI-оценкой или fallback на равномерное распределение.
   Future<PlanBuildResult> buildPlan({
@@ -58,7 +66,7 @@ class PlanBuilderService {
         LogCategory.plan,
         'Нет задач assignee: me — пробуем только ваше списанное время…',
       );
-      final workOnly = await _youTrack.fetchMyWorkTimelineIssues(
+      final workOnly = await _yt.fetchMyWorkTimelineIssues(
         startDate: start,
         endDate: end,
         excludeIssueIds: {},
@@ -329,6 +337,119 @@ class PlanBuilderService {
     );
   }
 
+  /// Строит план из готового JSON Cursor Agent (без запроса к API агента).
+  ///
+  /// Загружает задачи/списания из YouTrack за период и накладывает estimates из JSON.
+  Future<PlanBuildResult> buildPlanFromAiJson({
+    required DateTime start,
+    required DateTime end,
+    required String rawJson,
+    int? minutesPerWorkDay,
+    PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
+    LoadingProgressTracker? progress,
+  }) async {
+    final dayMinutes = minutesPerWorkDay ?? _minutesPerWorkDay;
+    final log = AppLog.instance;
+
+    progress?.advance('Загрузка задач из YouTrack');
+    log.info(LogCategory.plan, 'Построение плана из JSON Cursor…');
+    log.info(LogCategory.plan, 'Загрузка задач из YouTrack…');
+    var planIssues = await loadIssues(start, end);
+    if (planIssues.isEmpty) {
+      progress?.advance('Поиск задач по вашим списаниям');
+      log.warn(
+        LogCategory.plan,
+        'Нет задач assignee: me — пробуем только ваше списанное время…',
+      );
+      final workOnly = await _yt.fetchMyWorkTimelineIssues(
+        startDate: start,
+        endDate: end,
+        excludeIssueIds: {},
+      );
+      if (workOnly.isEmpty) {
+        log.warn(LogCategory.plan, 'Задачи не найдены за период');
+        return PlanBuildResult(
+          entries: [],
+          issues: [],
+          aiSummary: '',
+          usedAi: false,
+        );
+      }
+      planIssues = workOnly;
+    }
+
+    progress?.advance(
+      'Загрузка истории и списаний',
+      detail: '${planIssues.length} задач',
+    );
+    final data = await _loadContexts(
+      planIssues: planIssues,
+      start: start,
+      end: end,
+      progress: progress,
+    );
+    final planContexts = data.planContexts;
+    final allContexts = data.allContexts;
+
+    log.info(
+      LogCategory.plan,
+      'В плане ${planIssues.length} задач, '
+      'для учёта списанного — ${allContexts.length}',
+    );
+    _logExistingWork(log, allContexts);
+
+    progress?.advance('Разбор JSON Cursor Agent');
+    log.info(LogCategory.cursor, 'Разбор вставленного JSON Cursor Agent…');
+    final aiResult = AiTimeEstimator.parseRawResponse(
+      raw: rawJson,
+      periodStart: start,
+      periodEnd: end,
+      minutesPerWorkDay: dayMinutes,
+      contexts: planContexts,
+      existingContexts: allContexts,
+      calculationOptions: calculationOptions,
+    );
+
+    var entries = _entriesFromAi(planIssues, aiResult.estimates);
+    log.success(
+      LogCategory.cursor,
+      'JSON: ${entries.length} AI-записей'
+      '${aiResult.summary.isNotEmpty ? ' · ${aiResult.summary}' : ''}',
+    );
+
+    progress?.advance('Финализация плана (митап, лимиты)');
+    final snapshot = List<PlannedEntry>.from(entries);
+    entries = _finalizeEntries(
+      entries,
+      planIssues,
+      start,
+      end,
+      allContexts,
+      dayMinutes,
+      calculationOptions,
+    );
+
+    progress?.advance('Построение таймлайнов по дням');
+    final timelines = await _buildDayTimelines(
+      timelineContexts: allContexts,
+      entries: entries,
+      start: start,
+      end: end,
+      dayMinutes: dayMinutes,
+      calculationOptions: calculationOptions,
+    );
+
+    return PlanBuildResult(
+      entries: entries,
+      issues: planIssues,
+      aiSummary: aiResult.summary,
+      usedAi: true,
+      baselineEntries: snapshot,
+      dayTimelines: timelines,
+      issueContexts: allContexts,
+    );
+  }
+
   Future<({List<IssueContext> planContexts, List<IssueContext> allContexts})>
       _loadContexts({
     required List<YouTrackIssue> planIssues,
@@ -336,7 +457,7 @@ class PlanBuilderService {
     required DateTime end,
     LoadingProgressTracker? progress,
   }) async {
-    final extraIssues = await _youTrack.fetchMyWorkTimelineIssues(
+    final extraIssues = await _yt.fetchMyWorkTimelineIssues(
       startDate: start,
       endDate: end,
       excludeIssueIds: planIssues.map((i) => i.id).toSet(),
@@ -344,14 +465,14 @@ class PlanBuilderService {
 
     final allIssues = _mergeIssues(planIssues, extraIssues);
     final planContexts = await buildIssueContexts(
-      client: _youTrack,
+      client: _yt,
       issues: planIssues,
       start: start,
       end: end,
       progress: progress,
     );
     final allContexts = await buildIssueContexts(
-      client: _youTrack,
+      client: _yt,
       issues: allIssues,
       start: start,
       end: end,

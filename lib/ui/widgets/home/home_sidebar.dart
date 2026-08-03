@@ -5,8 +5,9 @@ import 'package:youtrack_timer/providers/design_variant_provider.dart';
 import 'package:youtrack_timer/services/settings_store.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/theme/design_tokens.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
+import 'package:youtrack_timer/ui/widgets/business/business_toolbar.dart';
 import 'package:youtrack_timer/ui/widgets/excluded_dates_control.dart';
-import 'package:youtrack_timer/ui/widgets/flat/flat_button.dart';
 import 'package:youtrack_timer/ui/widgets/hours_per_day_control.dart';
 import 'package:youtrack_timer/ui/widgets/meetup_settings_control.dart';
 import 'package:youtrack_timer/ui/widgets/period_selector.dart';
@@ -20,6 +21,7 @@ class HomeSidebar extends ConsumerWidget {
     required this.home,
     required this.settings,
     required this.onBuild,
+    this.onBuildFromJson,
     required this.onPreview,
     required this.onWrite,
     required this.onSettings,
@@ -29,6 +31,7 @@ class HomeSidebar extends ConsumerWidget {
   final HomeState home;
   final AppSettings settings;
   final VoidCallback onBuild;
+  final VoidCallback? onBuildFromJson;
   final VoidCallback onPreview;
   final VoidCallback onWrite;
   final VoidCallback onSettings;
@@ -37,13 +40,18 @@ class HomeSidebar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isLarge = ref.watch(designVariantProvider).isLarge;
+    final palette = ref.watch(designVariantProvider).palette;
     final layout = ref.watch(shellLayoutProvider);
     final compact = isLarge && !layout.leftNavExpanded;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: isLarge ? palette.panel : AppColors.surface,
+        border: Border(
+          right: BorderSide(
+            color: isLarge ? palette.border : AppColors.border,
+          ),
+        ),
       ),
       child: SafeArea(
         child: compact
@@ -51,6 +59,7 @@ class HomeSidebar extends ConsumerWidget {
                 home: home,
                 settings: settings,
                 onBuild: onBuild,
+                onBuildFromJson: onBuildFromJson,
                 onPreview: onPreview,
                 onWrite: onWrite,
                 onSettings: onSettings,
@@ -62,7 +71,9 @@ class HomeSidebar extends ConsumerWidget {
                 home: home,
                 settings: settings,
                 isLarge: isLarge,
+                palette: palette,
                 onBuild: onBuild,
+                onBuildFromJson: onBuildFromJson,
                 onPreview: onPreview,
                 onWrite: onWrite,
                 onSettings: onSettings,
@@ -83,6 +94,7 @@ class _CompactRail extends StatelessWidget {
     required this.home,
     required this.settings,
     required this.onBuild,
+    this.onBuildFromJson,
     required this.onPreview,
     required this.onWrite,
     required this.onSettings,
@@ -93,6 +105,7 @@ class _CompactRail extends StatelessWidget {
   final HomeState home;
   final AppSettings settings;
   final VoidCallback onBuild;
+  final VoidCallback? onBuildFromJson;
   final VoidCallback onPreview;
   final VoidCallback onWrite;
   final VoidCallback onSettings;
@@ -116,6 +129,7 @@ class _CompactRail extends StatelessWidget {
           icon: Icons.auto_graph_rounded,
           tooltip: home.plan == null ? 'Построить план' : 'Обновить план',
           onTap: home.isLoading ? null : onBuild,
+          onLongPress: home.isLoading ? null : onBuildFromJson,
           accent: true,
         ),
         _RailIcon(
@@ -156,6 +170,7 @@ class _RailIcon extends StatefulWidget {
     required this.icon,
     required this.tooltip,
     this.onTap,
+    this.onLongPress,
     this.accent = false,
     this.danger = false,
   });
@@ -163,6 +178,7 @@ class _RailIcon extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final bool accent;
   final bool danger;
 
@@ -194,6 +210,7 @@ class _RailIconState extends State<_RailIcon> {
           label: widget.tooltip,
           child: InkWell(
             onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
             child: AnimatedContainer(
               duration: DesignTokens.durationFast,
               width: 56,
@@ -214,7 +231,9 @@ class _ExpandedSidebar extends ConsumerWidget {
     required this.home,
     required this.settings,
     required this.isLarge,
+    required this.palette,
     required this.onBuild,
+    this.onBuildFromJson,
     required this.onPreview,
     required this.onWrite,
     required this.onSettings,
@@ -225,7 +244,9 @@ class _ExpandedSidebar extends ConsumerWidget {
   final HomeState home;
   final AppSettings settings;
   final bool isLarge;
+  final VariantPalette palette;
   final VoidCallback onBuild;
+  final VoidCallback? onBuildFromJson;
   final VoidCallback onPreview;
   final VoidCallback onWrite;
   final VoidCallback onSettings;
@@ -245,75 +266,21 @@ class _ExpandedSidebar extends ConsumerWidget {
             padding: EdgeInsets.fromLTRB(padding, padding, padding, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Header(
-                  isLarge: isLarge,
-                  onSettings: onSettings,
-                  onCollapse: onCollapse,
-                ),
-                SizedBox(height: isLarge ? 16 : 24),
-                _SectionLabel('Период', isLarge: isLarge),
-                const SizedBox(height: 8),
-                PeriodSelector(
-                  start: home.startDate,
-                  end: home.endDate,
-                  enabled: !home.isLoading,
-                  onChanged: (s, e) =>
-                      ref.read(homeProvider.notifier).setPeriod(s, e),
-                ),
-                const SizedBox(height: 12),
-                const ExcludedDatesControl(),
-                const SizedBox(height: 16),
-                const HoursPerDayControl(),
-                const SizedBox(height: 16),
-                const MeetupSettingsControl(),
-                const SizedBox(height: 16),
-                const RecalcHintField(),
-                const SizedBox(height: 16),
-                StatusPill(
-                  icon: Icons.cloud_outlined,
-                  label: 'YouTrack',
-                  ok: settings.hasYouTrack,
-                ),
-                const SizedBox(height: 8),
-                StatusPill(
-                  icon: Icons.auto_awesome,
-                  label: 'Cursor AI',
-                  ok: settings.hasCursor && settings.useAi,
-                ),
-                const SizedBox(height: 8),
-                StatusPill(
-                  icon: Icons.hub_outlined,
-                  label: 'GitLab',
-                  ok: settings.hasGitLab,
-                ),
-                if (settings.dryRun) ...[
-                  const SizedBox(height: 8),
-                  const StatusPill(
-                    icon: Icons.shield_outlined,
-                    label: 'Защита: без записи',
-                    ok: true,
-                  ),
-                ],
-              ],
+              children: isLarge
+                  ? _largeSections(ref, home, settings, palette)
+                  : _currentSections(ref, home, settings),
             ),
           ),
         ),
         Padding(
           padding: EdgeInsets.fromLTRB(padding, 8, padding, padding),
           child: isLarge
-              ? _LargeActions(
-                  home: home,
-                  canWrite: canWrite,
-                  onBuild: onBuild,
-                  onGitLab: onGitLab,
-                  onPreview: onPreview,
-                  onWrite: onWrite,
-                )
+              ? const SizedBox.shrink()
               : _CurrentActions(
                   home: home,
                   canWrite: canWrite,
                   onBuild: onBuild,
+                  onBuildFromJson: onBuildFromJson,
                   onGitLab: onGitLab,
                   onPreview: onPreview,
                   onWrite: onWrite,
@@ -322,16 +289,156 @@ class _ExpandedSidebar extends ConsumerWidget {
       ],
     );
   }
+
+  List<Widget> _currentSections(
+    WidgetRef ref,
+    HomeState home,
+    AppSettings settings,
+  ) {
+    return [
+      _Header(
+        isLarge: false,
+        onSettings: onSettings,
+        onCollapse: onCollapse,
+      ),
+      const SizedBox(height: 24),
+      const _SectionLabel('Период', isLarge: false),
+      const SizedBox(height: 8),
+      PeriodSelector(
+        start: home.startDate,
+        end: home.endDate,
+        enabled: !home.isLoading,
+        onChanged: (s, e) => ref.read(homeProvider.notifier).setPeriod(s, e),
+      ),
+      const SizedBox(height: 12),
+      const ExcludedDatesControl(),
+      const SizedBox(height: 16),
+      const HoursPerDayControl(),
+      const SizedBox(height: 16),
+      const MeetupSettingsControl(),
+      const SizedBox(height: 16),
+      const RecalcHintField(),
+      const SizedBox(height: 16),
+      StatusPill(
+        icon: Icons.cloud_outlined,
+        label: 'YouTrack',
+        ok: settings.hasYouTrack,
+      ),
+      const SizedBox(height: 8),
+      StatusPill(
+        icon: Icons.auto_awesome,
+        label: 'Cursor AI',
+        ok: settings.hasCursor && settings.useAi,
+      ),
+      const SizedBox(height: 8),
+      StatusPill(
+        icon: Icons.hub_outlined,
+        label: 'GitLab',
+        ok: settings.hasGitLab,
+      ),
+      if (settings.dryRun) ...[
+        const SizedBox(height: 8),
+        const StatusPill(
+          icon: Icons.shield_outlined,
+          label: 'Защита: без записи',
+          ok: true,
+        ),
+      ],
+    ];
+  }
+
+  List<Widget> _largeSections(
+    WidgetRef ref,
+    HomeState home,
+    AppSettings settings,
+    VariantPalette palette,
+  ) {
+    return [
+      _Header(
+        isLarge: true,
+        palette: palette,
+        onSettings: onSettings,
+        onCollapse: onCollapse,
+      ),
+      const SizedBox(height: 10),
+      BusinessFormSection(
+        palette: palette,
+        title: 'Период',
+        dense: true,
+        child: PeriodSelector(
+          start: home.startDate,
+          end: home.endDate,
+          enabled: !home.isLoading,
+          onChanged: (s, e) => ref.read(homeProvider.notifier).setPeriod(s, e),
+        ),
+      ),
+      const SizedBox(height: 8),
+      BusinessFormSection(
+        palette: palette,
+        title: 'Параметры плана',
+        dense: true,
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ExcludedDatesControl(),
+            SizedBox(height: 10),
+            HoursPerDayControl(),
+            SizedBox(height: 10),
+            MeetupSettingsControl(),
+            SizedBox(height: 10),
+            RecalcHintField(),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      BusinessFormSection(
+        palette: palette,
+        title: 'Подключения',
+        dense: true,
+        child: Column(
+          children: [
+            StatusPill(
+              icon: Icons.cloud_outlined,
+              label: 'YouTrack',
+              ok: settings.hasYouTrack,
+            ),
+            const SizedBox(height: 6),
+            StatusPill(
+              icon: Icons.auto_awesome,
+              label: 'Cursor AI',
+              ok: settings.hasCursor && settings.useAi,
+            ),
+            const SizedBox(height: 6),
+            StatusPill(
+              icon: Icons.hub_outlined,
+              label: 'GitLab',
+              ok: settings.hasGitLab,
+            ),
+            if (settings.dryRun) ...[
+              const SizedBox(height: 6),
+              const StatusPill(
+                icon: Icons.shield_outlined,
+                label: 'Защита: без записи',
+                ok: true,
+              ),
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
 }
 
 class _Header extends StatelessWidget {
   const _Header({
     required this.isLarge,
     required this.onSettings,
+    this.palette,
     this.onCollapse,
   });
 
   final bool isLarge;
+  final VariantPalette? palette;
   final VoidCallback onSettings;
   final VoidCallback? onCollapse;
 
@@ -340,20 +447,28 @@ class _Header extends StatelessWidget {
     return Row(
       children: [
         Container(
-          padding: EdgeInsets.all(isLarge ? 8 : 10),
+          padding: EdgeInsets.all(isLarge ? 4 : 10),
           decoration: BoxDecoration(
-            color: isLarge ? AppColors.primarySoft : null,
+            color: isLarge ? palette?.buttonFace : null,
             gradient: isLarge
                 ? null
                 : const LinearGradient(
                     colors: [AppColors.primary, Color(0xFF5B4FD6)],
                   ),
-            borderRadius: BorderRadius.circular(isLarge ? 6 : 12),
+            border: isLarge
+                ? Border(
+                    top: BorderSide(color: palette!.borderHighlight),
+                    left: BorderSide(color: palette!.borderHighlight),
+                    bottom: BorderSide(color: palette!.borderShadow),
+                    right: BorderSide(color: palette!.borderShadow),
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(isLarge ? 0 : 12),
           ),
           child: Icon(
             Icons.timer_outlined,
-            color: isLarge ? AppColors.primary : Colors.white,
-            size: isLarge ? 18 : 24,
+            color: isLarge ? palette!.textPrimary : Colors.white,
+            size: isLarge ? 16 : 24,
           ),
         ),
         const SizedBox(width: 12),
@@ -364,15 +479,16 @@ class _Header extends StatelessWidget {
               Text(
                 'YouTrack Timer',
                 style: TextStyle(
-                  fontSize: isLarge ? 14 : 16,
+                  fontSize: isLarge ? 12 : 16,
                   fontWeight: FontWeight.w700,
+                  color: isLarge ? palette?.textPrimary : null,
                 ),
               ),
               Text(
-                'План времени с AI',
+                isLarge ? 'Параметры' : 'План времени с AI',
                 style: TextStyle(
-                  fontSize: isLarge ? 11 : 11,
-                  color: AppColors.textMuted,
+                  fontSize: 11,
+                  color: isLarge ? palette?.textMuted : AppColors.textMuted,
                 ),
               ),
             ],
@@ -416,77 +532,12 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _LargeActions extends StatelessWidget {
-  const _LargeActions({
-    required this.home,
-    required this.canWrite,
-    required this.onBuild,
-    required this.onGitLab,
-    required this.onPreview,
-    required this.onWrite,
-  });
-
-  final HomeState home;
-  final bool canWrite;
-  final VoidCallback onBuild;
-  final VoidCallback onGitLab;
-  final VoidCallback onPreview;
-  final VoidCallback onWrite;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FlatButton(
-          label: home.isLoading && home.loadingProgress != null
-              ? '${home.loadingProgress!.percent}% · '
-                  '${home.plan == null ? 'Построение' : 'Обновление'}'
-              : home.plan == null
-                  ? 'Построить план'
-                  : 'Обновить план',
-          icon: Icons.auto_graph_rounded,
-          variant: FlatButtonVariant.primary,
-          onPressed: home.isLoading ? null : onBuild,
-        ),
-        const SizedBox(height: 6),
-        FlatButton(
-          label: 'GitLab аналитика',
-          icon: Icons.analytics_outlined,
-          onPressed: home.isLoading ? null : onGitLab,
-        ),
-        const SizedBox(height: 6),
-        FlatButton(
-          label: 'Проверить',
-          icon: Icons.fact_check_outlined,
-          onPressed: home.isLoading ? null : onPreview,
-        ),
-        const SizedBox(height: 6),
-        FlatButton(
-          label: canWrite ? 'Записать в YouTrack' : 'Запись выкл.',
-          icon: canWrite ? Icons.cloud_upload : Icons.lock_outline,
-          variant: canWrite ? FlatButtonVariant.danger : FlatButtonVariant.secondary,
-          onPressed: home.isLoading ? null : onWrite,
-        ),
-        if (home.plan == null && !home.isLoading)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: Text(
-              'Выберите период и постройте план',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, color: AppColors.warning),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 class _CurrentActions extends StatelessWidget {
   const _CurrentActions({
     required this.home,
     required this.canWrite,
     required this.onBuild,
+    this.onBuildFromJson,
     required this.onGitLab,
     required this.onPreview,
     required this.onWrite,
@@ -495,6 +546,7 @@ class _CurrentActions extends StatelessWidget {
   final HomeState home;
   final bool canWrite;
   final VoidCallback onBuild;
+  final VoidCallback? onBuildFromJson;
   final VoidCallback onGitLab;
   final VoidCallback onPreview;
   final VoidCallback onWrite;
@@ -506,6 +558,7 @@ class _CurrentActions extends StatelessWidget {
       children: [
         FilledButton.icon(
           onPressed: home.isLoading ? null : onBuild,
+          onLongPress: home.isLoading ? null : onBuildFromJson,
           icon: home.isLoading
               ? const SizedBox(
                   width: 18,

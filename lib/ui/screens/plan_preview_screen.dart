@@ -9,9 +9,14 @@ import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/services/plan_builder_service.dart';
 import 'package:youtrack_timer/services/plan_preview_builder.dart';
 import 'package:youtrack_timer/services/submit_service.dart';
+import 'package:youtrack_timer/providers/design_variant_provider.dart';
+import 'package:youtrack_timer/ui/layout/variant_scaffold.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/theme/design_tokens.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
+import 'package:youtrack_timer/ui/widgets/business/one_c_title_bar.dart';
 import 'package:youtrack_timer/ui/widgets/loading_progress_view.dart';
 import 'package:youtrack_timer/ui/widgets/preview/plan_preview_day_list.dart';
 import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
@@ -125,64 +130,71 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
 
   void _showIssueDetails(PlanPreviewRow row, PlanPreviewDay day) {
     final fmt = DateFormat('d MMMM yyyy', 'ru');
+    final p = ref.read(designVariantProvider).palette;
 
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
+      backgroundColor: p.isOneC ? p.formBackground : AppColors.surface,
+      shape: p.isOneC
+          ? null
+          : const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+            ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: EdgeInsets.fromLTRB(p.isOneC ? 12 : 20, 12, p.isOneC ? 12 : 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.border,
-                    borderRadius: BorderRadius.circular(2),
+              if (!p.isOneC)
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: p.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+              if (!p.isOneC) const SizedBox(height: 16),
               YouTrackIssueLink(
                 issueIdReadable: row.issueIdReadable,
                 baseUrl: widget.baseUrl,
                 showIcon: true,
-                style: const TextStyle(
-                  fontSize: 18,
+                style: TextStyle(
+                  fontSize: p.isOneC ? 14 : 18,
                   fontWeight: FontWeight.w700,
+                  color: p.textPrimary,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 row.summary,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: AppColors.textSecondary,
+                  color: p.textSecondary,
                   height: 1.4,
                 ),
               ),
               const SizedBox(height: 16),
-              _detailLine('День', fmt.format(day.day)),
+              _detailLine(p, 'День', fmt.format(day.day)),
               if (row.existingMinutes > 0)
                 _detailLine(
+                  p,
                   'Уже в YouTrack',
                   TimeFormat.minutes(row.existingMinutes),
                 ),
               if (row.plannedMinutes > 0) ...[
                 _detailLine(
+                  p,
                   'Новый план',
                   TimeFormat.minutes(row.plannedMinutes),
                 ),
-                _detailLine('При записи', _statusLabel(row.plannedStatus)),
+                _detailLine(p, 'При записи', _statusLabel(row.plannedStatus)),
               ],
-              _detailLine('Итого за день', TimeFormat.minutes(row.totalMinutes)),
+              _detailLine(p, 'Итого за день', TimeFormat.minutes(row.totalMinutes)),
             ],
           ),
         ),
@@ -197,7 +209,7 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
         null => '—',
       };
 
-  Widget _detailLine(String label, String value) {
+  Widget _detailLine(VariantPalette p, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -207,13 +219,17 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              style: TextStyle(fontSize: 12, color: p.textMuted),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: p.textPrimary,
+              ),
             ),
           ),
         ],
@@ -226,29 +242,32 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
     final period =
         '${DateFormat('d MMM yyyy', 'ru').format(widget.startDate)} — '
         '${DateFormat('d MMM yyyy', 'ru').format(widget.endDate)}';
+    final isLarge = ref.watch(designVariantProvider).isLarge;
+    final p = ref.watch(designVariantProvider).palette;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Проверка плана', style: TextStyle(fontSize: 16)),
-            Text(
-              'Без записи в YouTrack',
-              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-            ),
-          ],
-        ),
-        actions: [
-          if (!_loading)
-            IconButton(
-              tooltip: 'Обновить проверку',
-              onPressed: _runCheck,
-              icon: const Icon(Icons.refresh, size: 20),
-            ),
-        ],
-      ),
+    return VariantScaffold(
+      title: 'Проверка плана',
+      subtitle: 'Без записи в YouTrack · $period',
+      toolbarActions: isLarge && !_loading
+          ? [
+              OneCToolbarButton(
+                palette: ref.watch(designVariantProvider).palette,
+                label: 'Обновить',
+                icon: Icons.refresh,
+                onPressed: _runCheck,
+              ),
+            ]
+          : null,
+      actions: isLarge
+          ? null
+          : [
+              if (!_loading)
+                IconButton(
+                  tooltip: 'Обновить проверку',
+                  onPressed: _runCheck,
+                  icon: const Icon(Icons.refresh, size: 20),
+                ),
+            ],
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -268,15 +287,15 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
                 layout: LoadingProgressLayout.strip,
               ),
             ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+          Padding(
+            padding: EdgeInsets.fromLTRB(isLarge ? 8 : 16, 4, isLarge ? 8 : 16, 0),
             child: Row(
               children: [
-                _LegendDot(color: AppColors.accent, label: 'Запишется'),
-                SizedBox(width: 16),
-                _LegendDot(color: AppColors.textMuted, label: 'Пропуск'),
-                SizedBox(width: 16),
-                _LegendDot(color: AppColors.existing, label: 'Уже в YT'),
+                _LegendDot(color: p.planned, label: 'Запишется'),
+                SizedBox(width: p.isOneC ? 12 : 16),
+                _LegendDot(color: p.textMuted, label: 'Пропуск'),
+                SizedBox(width: p.isOneC ? 12 : 16),
+                _LegendDot(color: p.existing, label: 'Уже в YT'),
               ],
             ),
           ),
@@ -293,7 +312,7 @@ class _PlanPreviewScreenState extends ConsumerState<PlanPreviewScreen> {
   }
 }
 
-class _HeaderPanel extends StatelessWidget {
+class _HeaderPanel extends ConsumerWidget {
   const _HeaderPanel({
     required this.period,
     required this.loading,
@@ -311,58 +330,45 @@ class _HeaderPanel extends StatelessWidget {
   final int dayCount;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(designVariantProvider).palette;
+    final isLarge = p.isOneC;
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
-        border: Border.all(color: AppColors.border),
-      ),
+      margin: EdgeInsets.fromLTRB(isLarge ? 8 : 16, isLarge ? 4 : 12, isLarge ? 8 : 16, 8),
+      padding: EdgeInsets.all(isLarge ? 10 : 16),
+      decoration: isLarge
+          ? OneCDecorations.flatPanel(p)
+          : BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+              border: Border.all(color: AppColors.border),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            period,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+          if (!isLarge)
+            Text(
+              period,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
-          ),
-          const SizedBox(height: 12),
+          if (!isLarge) const SizedBox(height: 12),
           if (loading)
-            const Text(
+            Text(
               'Проверка дубликатов…',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 12, color: p.textSecondary),
             )
           else if (error != null)
-            Text(error!, style: const TextStyle(color: AppColors.warning))
+            Text(error!, style: TextStyle(color: p.warning))
           else if (result != null)
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: isLarge ? 4 : 8,
+              runSpacing: isLarge ? 4 : 8,
               children: [
-                _StatTile(
-                  label: 'Записей в плане',
-                  value: '$entryCount',
-                  color: AppColors.primary,
-                ),
-                _StatTile(
-                  label: 'Запишется',
-                  value: '${result!.created}',
-                  color: AppColors.accent,
-                ),
-                _StatTile(
-                  label: 'Пропуск',
-                  value: '${result!.skipped}',
-                  color: AppColors.textMuted,
-                ),
-                _StatTile(
-                  label: 'Рабочих дней',
-                  value: '$dayCount',
-                  color: AppColors.textSecondary,
-                ),
+                _StatTile(palette: p, label: 'Записей в плане', value: '$entryCount'),
+                _StatTile(palette: p, label: 'Запишется', value: '${result!.created}'),
+                _StatTile(palette: p, label: 'Пропуск', value: '${result!.skipped}'),
+                _StatTile(palette: p, label: 'Рабочих дней', value: '$dayCount'),
               ],
             ),
         ],
@@ -373,34 +379,56 @@ class _HeaderPanel extends StatelessWidget {
 
 class _StatTile extends StatelessWidget {
   const _StatTile({
+    required this.palette,
     required this.label,
     required this.value,
-    required this.color,
   });
 
+  final VariantPalette palette;
   final String label;
   final String value;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
+    if (palette.isOneC) {
+      return DecoratedBox(
+        decoration: OneCDecorations.raised(palette),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: palette.textPrimary,
+                ),
+              ),
+              Text(
+                label,
+                style: TextStyle(fontSize: 9, color: palette.textMuted),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: AppColors.primarySoft,
         borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
           Text(
             label,
@@ -412,26 +440,31 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-class _LegendDot extends StatelessWidget {
+class _LegendDot extends ConsumerWidget {
   const _LegendDot({required this.color, required this.label});
 
   final Color color;
   final String label;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(designVariantProvider).palette;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          decoration: BoxDecoration(
+            color: color,
+            border: p.isOneC ? Border.all(color: p.border) : null,
+            shape: p.isOneC ? BoxShape.rectangle : BoxShape.circle,
+          ),
         ),
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+          style: TextStyle(fontSize: 11, color: p.textMuted),
         ),
       ],
     );

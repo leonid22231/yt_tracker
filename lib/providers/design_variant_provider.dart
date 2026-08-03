@@ -92,6 +92,15 @@ class ShellLayoutNotifier extends StateNotifier<ShellLayoutState> {
 
   void toggleLogExpanded() =>
       update((s) => s.copyWith(logExpanded: !s.logExpanded));
+
+  void setLogPanelHeight(double height) => update(
+        (s) => s.copyWith(
+          logPanelHeight: height.clamp(
+            ShellLayoutState.logPanelHeightMin,
+            ShellLayoutState.logPanelHeightMax,
+          ),
+        ),
+      );
 }
 
 /// Быстрый переключатель режима в TopBar.

@@ -4,6 +4,8 @@ import 'package:youtrack_timer/models/issue.dart';
 import 'package:youtrack_timer/models/time_estimate.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/theme/design_tokens.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
 import 'package:youtrack_timer/ui/widgets/labeled_slider.dart';
 import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
@@ -63,6 +65,7 @@ class _PlanIssueEditorState extends State<PlanIssueEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final hasManualBudget = widget.budgetMinutes != null;
     const sliderMax = 40.0;
     final dateFmt = DateFormat('EEE d MMM', 'ru');
@@ -80,9 +83,9 @@ class _PlanIssueEditorState extends State<PlanIssueEditor> {
           const SizedBox(height: 4),
           Text(
             widget.issue.summary,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: AppColors.textSecondary,
+              color: p.textSecondary,
               height: 1.4,
             ),
           ),
@@ -129,8 +132,8 @@ class _PlanIssueEditorState extends State<PlanIssueEditor> {
           icon: const Icon(Icons.remove_circle_outline, size: 16),
           label: const Text('Убрать из плана'),
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.danger,
-            side: const BorderSide(color: AppColors.danger),
+            foregroundColor: p.danger,
+            side: BorderSide(color: p.danger),
             visualDensity: VisualDensity.compact,
           ),
         ),
@@ -140,7 +143,7 @@ class _PlanIssueEditorState extends State<PlanIssueEditor> {
           style: TextStyle(
             fontSize: widget.compact ? 10 : 12,
             fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
+            color: p.textSecondary,
             letterSpacing: 0.5,
           ),
         ),
@@ -151,25 +154,28 @@ class _PlanIssueEditorState extends State<PlanIssueEditor> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceHigh,
-                borderRadius:
-                    BorderRadius.circular(DesignTokens.radiusSm),
-                border: Border.all(color: AppColors.border),
-              ),
+              padding: EdgeInsets.all(p.isOneC ? 6 : 10),
+              decoration: p.isOneC
+                  ? OneCDecorations.sunken(p)
+                  : BoxDecoration(
+                      color: AppColors.surfaceHigh,
+                      borderRadius:
+                          BorderRadius.circular(DesignTokens.radiusSm),
+                      border: Border.all(color: AppColors.border),
+                    ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     children: [
-                      _SourceBadge(source: e.source),
+                      _SourceBadge(palette: p, source: e.source),
                       const SizedBox(width: 8),
                       Text(
                         dateFmt.format(e.date),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
+                          color: p.textPrimary,
                         ),
                       ),
                       const Spacer(),
@@ -177,10 +183,10 @@ class _PlanIssueEditorState extends State<PlanIssueEditor> {
                         TimeFormat.minutes(
                           TimeFormat.sliderHoursToMinutes(hours),
                         ),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                          color: p.link,
                         ),
                       ),
                     ],
@@ -212,9 +218,9 @@ class _PlanIssueEditorState extends State<PlanIssueEditor> {
                       e.reasoning!,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textMuted,
+                        color: p.textMuted,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -229,17 +235,29 @@ class _PlanIssueEditorState extends State<PlanIssueEditor> {
 }
 
 class _SourceBadge extends StatelessWidget {
-  const _SourceBadge({required this.source});
+  const _SourceBadge({required this.palette, required this.source});
 
+  final VariantPalette palette;
   final PlanSource source;
 
   @override
   Widget build(BuildContext context) {
     final (icon, label, color) = switch (source) {
-      PlanSource.ai => (Icons.auto_awesome, 'AI', AppColors.accent),
-      PlanSource.manual => (Icons.tune, 'ручн.', AppColors.warning),
-      PlanSource.even => (Icons.balance, 'равн.', AppColors.textMuted),
+      PlanSource.ai => (Icons.auto_awesome, 'AI', palette.planned),
+      PlanSource.manual => (Icons.tune, 'ручн.', palette.warning),
+      PlanSource.even => (Icons.balance, 'равн.', palette.textMuted),
     };
+
+    if (palette.isOneC) {
+      return Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

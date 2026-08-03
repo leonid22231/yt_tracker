@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/day_timeline.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
+import 'package:youtrack_timer/providers/design_variant_provider.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
+import 'package:youtrack_timer/ui/widgets/business/day_timeline_timesheet.dart';
 import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
 
 /// Посуточная шкала: уже в YouTrack + новый план.
@@ -18,6 +20,11 @@ class DayTimelineView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isLarge = ref.watch(designVariantProvider).isLarge;
+    if (isLarge) {
+      return DayTimelineTimesheet(timelines: timelines);
+    }
+
     final youTrackBaseUrl = ref.watch(settingsProvider).valueOrNull?.youTrackUrl;
     if (timelines.isEmpty) {
       return const Center(

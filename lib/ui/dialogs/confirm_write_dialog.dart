@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtrack_timer/services/plan_builder_service.dart';
+import 'package:youtrack_timer/providers/design_variant_provider.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
+import 'package:youtrack_timer/ui/widgets/business/one_c_dialog.dart';
 import 'package:youtrack_timer/utils/date_utils.dart' as yt_date;
 
 /// Диалог подтверждения записи в YouTrack.
-class ConfirmWriteDialog extends StatefulWidget {
+class ConfirmWriteDialog extends ConsumerStatefulWidget {
   const ConfirmWriteDialog({
     super.key,
     required this.plan,
@@ -34,10 +38,10 @@ class ConfirmWriteDialog extends StatefulWidget {
   }
 
   @override
-  State<ConfirmWriteDialog> createState() => _ConfirmWriteDialogState();
+  ConsumerState<ConfirmWriteDialog> createState() => _ConfirmWriteDialogState();
 }
 
-class _ConfirmWriteDialogState extends State<ConfirmWriteDialog> {
+class _ConfirmWriteDialogState extends ConsumerState<ConfirmWriteDialog> {
   var _confirmed = false;
 
   int get _totalMinutes =>
@@ -45,71 +49,75 @@ class _ConfirmWriteDialogState extends State<ConfirmWriteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final p = ref.watch(designVariantProvider).palette;
     final period =
         '${yt_date.DateUtils.formatForQuery(widget.startDate)} — '
         '${yt_date.DateUtils.formatForQuery(widget.endDate)}';
 
-    return AlertDialog(
-      icon: const Icon(Icons.warning_amber, color: Colors.orangeAccent),
-      title: const Text('Записать в YouTrack?'),
-      content: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Будут созданы work items в вашем инстансе YouTrack. '
-              'Отменить автоматически нельзя.',
-              style: TextStyle(fontSize: 13),
+    return OneCAwareDialog(
+      icon: Icons.warning_amber,
+      title: 'Записать в YouTrack?',
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Будут созданы work items в вашем инстансе YouTrack. '
+            'Отменить автоматически нельзя.',
+            style: TextStyle(fontSize: 12, color: p.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          _row(p, 'Период', period),
+          _row(p, 'Записей', '${widget.plan.entries.length}'),
+          _row(p, 'Суммарно', '${_totalMinutes ~/ 60} ч ${_totalMinutes % 60} м'),
+          _row(p, 'Задач', '${widget.plan.issues.length}'),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(
+              'Я понимаю, данные будут записаны в YouTrack',
+              style: TextStyle(fontSize: 11, color: p.textPrimary),
             ),
-            const SizedBox(height: 16),
-            _row('Период', period),
-            _row('Записей', '${widget.plan.entries.length}'),
-            _row('Суммарно', '${_totalMinutes ~/ 60} ч ${_totalMinutes % 60} м'),
-            _row('Задач', '${widget.plan.issues.length}'),
-            const SizedBox(height: 12),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text(
-                'Я понимаю, данные будут записаны в YouTrack',
-                style: TextStyle(fontSize: 13),
-              ),
-              value: _confirmed,
-              onChanged: (v) => setState(() => _confirmed = v ?? false),
-            ),
-          ],
-        ),
+            value: _confirmed,
+            onChanged: (v) => setState(() => _confirmed = v ?? false),
+          ),
+        ],
       ),
       actions: [
-        TextButton(
+        VariantDialogButton(
+          label: 'Отмена',
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Отмена'),
         ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Colors.red.shade700,
-          ),
+        const SizedBox(width: 6),
+        VariantDialogButton(
+          label: 'Записать',
+          primary: true,
+          danger: true,
           onPressed: _confirmed ? () => Navigator.pop(context, true) : null,
-          child: const Text('Записать'),
         ),
       ],
     );
   }
 
-  Widget _row(String label, String value) {
+  Widget _row(VariantPalette p, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 90,
             child: Text(
               label,
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(fontSize: 11, color: p.textSecondary),
             ),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(fontSize: 13)),
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 11, color: p.textPrimary),
+            ),
           ),
         ],
       ),

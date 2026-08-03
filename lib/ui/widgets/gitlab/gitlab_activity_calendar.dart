@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/gitlab/daily_activity_summary.dart';
 import 'package:youtrack_timer/models/gitlab/productivity_metric.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 import 'package:youtrack_timer/utils/date_utils.dart';
 
 /// Календарь-heatmap с кликом по дню.
@@ -24,6 +26,7 @@ class GitLabActivityCalendar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (metrics.dailySummaries.isEmpty) return const SizedBox.shrink();
 
+    final p = context.palette;
     final start = metrics.dailySummaries.first.date;
     final end = metrics.dailySummaries.last.date;
     final byDay = {
@@ -51,39 +54,48 @@ class GitLabActivityCalendar extends StatelessWidget {
     }
 
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-      ),
-      padding: const EdgeInsets.all(16),
+      decoration: p.isOneC
+          ? OneCDecorations.flatPanel(p)
+          : BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.border),
+            ),
+      padding: EdgeInsets.all(p.isOneC ? 10 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const Icon(Icons.calendar_month_rounded,
-                  size: 18, color: AppColors.primary),
+              Icon(
+                Icons.calendar_month_rounded,
+                size: p.isOneC ? 16 : 18,
+                color: p.isOneC ? p.link : AppColors.primary,
+              ),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Календарь активности',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: p.isOneC ? 12 : 15,
+                    color: p.textPrimary,
+                  ),
                 ),
               ),
               Text(
                 '${DateFormat('d MMM', 'ru').format(start)} — '
                 '${DateFormat('d MMM yyyy', 'ru').format(end)}',
-                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                style: TextStyle(fontSize: 11, color: p.textMuted),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Нажмите на день для подробной аналитики',
-            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+            style: TextStyle(fontSize: 11, color: p.textMuted),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: p.isOneC ? 8 : 14),
           Row(
             children: [
               for (final w in _weekdays)
@@ -91,10 +103,10 @@ class GitLabActivityCalendar extends StatelessWidget {
                   child: Center(
                     child: Text(
                       w,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textMuted,
+                        color: p.textMuted,
                       ),
                     ),
                   ),
@@ -114,6 +126,7 @@ class GitLabActivityCalendar extends StatelessWidget {
                         child: day == null
                             ? const SizedBox.shrink()
                             : _DayCell(
+                                palette: p,
                                 day: day,
                                 summary: byDay[day],
                                 maxScore: effectiveMax,
@@ -128,7 +141,7 @@ class GitLabActivityCalendar extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          _Legend(maxScore: effectiveMax),
+          _Legend(palette: p, maxScore: effectiveMax),
         ],
       ),
     );
@@ -143,6 +156,7 @@ class GitLabActivityCalendar extends StatelessWidget {
 
 class _DayCell extends StatelessWidget {
   const _DayCell({
+    required this.palette,
     required this.day,
     required this.summary,
     required this.maxScore,
@@ -150,6 +164,7 @@ class _DayCell extends StatelessWidget {
     required this.onTap,
   });
 
+  final VariantPalette palette;
   final DateTime day;
   final DailyActivitySummary? summary;
   final double maxScore;
@@ -162,9 +177,50 @@ class _DayCell extends StatelessWidget {
         (summary!.commitCount > 0 || summary!.branchesTouched > 0);
     final score = summary?.productivityScore ?? 0;
     final t = maxScore > 0 ? (score / maxScore).clamp(0.0, 1.0) : 0.0;
-    final bg = active
-        ? Color.lerp(AppColors.surfaceHigh, AppColors.primary, t * 0.85 + 0.15)!
-        : AppColors.surfaceHigh.withValues(alpha: 0.5);
+
+    Color bg;
+    Color borderColor;
+    Color textColor;
+    Color subColor;
+    double borderWidth;
+
+    if (palette.isOneC) {
+      if (selected) {
+        bg = palette.tableSelected;
+        borderColor = palette.borderShadow;
+        textColor = palette.tableSelectedText;
+        subColor = palette.tableSelectedText;
+        borderWidth = 1;
+      } else if (active) {
+        bg = Color.lerp(palette.inputBackground, palette.tableSelected, t * 0.7)!;
+        borderColor = palette.border;
+        textColor = t > 0.55 ? palette.tableSelectedText : palette.textPrimary;
+        subColor = t > 0.55 ? palette.tableSelectedText : palette.link;
+        borderWidth = 1;
+      } else {
+        bg = palette.inputBackground;
+        borderColor = palette.border;
+        textColor = palette.textMuted;
+        subColor = palette.textMuted;
+        borderWidth = 1;
+      }
+    } else {
+      bg = active
+          ? Color.lerp(AppColors.surfaceHigh, AppColors.primary, t * 0.85 + 0.15)!
+          : AppColors.surfaceHigh.withValues(alpha: 0.5);
+      borderColor = selected
+          ? AppColors.accent
+          : active
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border.withValues(alpha: 0.5);
+      textColor = active && t > 0.45 ? Colors.white : AppColors.textSecondary;
+      subColor = t > 0.45
+          ? Colors.white.withValues(alpha: 0.9)
+          : AppColors.primary;
+      borderWidth = selected ? 2 : 1;
+    }
+
+    final radius = palette.isOneC ? BorderRadius.zero : BorderRadius.circular(10);
 
     return Tooltip(
       message: active
@@ -176,21 +232,14 @@ class _DayCell extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: radius,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: selected
-                    ? AppColors.accent
-                    : active
-                        ? AppColors.primary.withValues(alpha: 0.35)
-                        : AppColors.border.withValues(alpha: 0.5),
-                width: selected ? 2 : 1,
-              ),
-              boxShadow: selected
+              borderRadius: radius,
+              border: Border.all(color: borderColor, width: borderWidth),
+              boxShadow: !palette.isOneC && selected
                   ? [
                       BoxShadow(
                         color: AppColors.accent.withValues(alpha: 0.25),
@@ -206,11 +255,9 @@ class _DayCell extends StatelessWidget {
                 Text(
                   '${day.day}',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: palette.isOneC ? 11 : 12,
                     fontWeight: FontWeight.w700,
-                    color: active && t > 0.45
-                        ? Colors.white
-                        : AppColors.textSecondary,
+                    color: textColor,
                   ),
                 ),
                 if (active) ...[
@@ -220,9 +267,7 @@ class _DayCell extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w600,
-                      color: t > 0.45
-                          ? Colors.white.withValues(alpha: 0.9)
-                          : AppColors.primary,
+                      color: subColor,
                     ),
                   ),
                 ],
@@ -236,15 +281,19 @@ class _DayCell extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend({required this.maxScore});
+  const _Legend({required this.palette, required this.maxScore});
 
+  final VariantPalette palette;
   final double maxScore;
 
   @override
   Widget build(BuildContext context) {
+    final low = palette.isOneC ? palette.inputBackground : AppColors.surfaceHigh;
+    final high = palette.isOneC ? palette.tableSelected : AppColors.primary;
+
     return Row(
       children: [
-        const Text('Меньше', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+        Text('Меньше', style: TextStyle(fontSize: 10, color: palette.textMuted)),
         const SizedBox(width: 8),
         Expanded(
           child: Row(
@@ -255,12 +304,13 @@ class _Legend extends StatelessWidget {
                     height: 8,
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(
-                      color: Color.lerp(
-                        AppColors.surfaceHigh,
-                        AppColors.primary,
-                        i / 4 * 0.85 + 0.15,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
+                      color: Color.lerp(low, high, i / 4 * 0.85 + 0.15),
+                      border: palette.isOneC
+                          ? Border.all(color: palette.border)
+                          : null,
+                      borderRadius: palette.isOneC
+                          ? BorderRadius.zero
+                          : BorderRadius.circular(4),
                     ),
                   ),
                 ),
@@ -268,7 +318,7 @@ class _Legend extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        const Text('Больше', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+        Text('Больше', style: TextStyle(fontSize: 10, color: palette.textMuted)),
       ],
     );
   }

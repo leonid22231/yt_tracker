@@ -174,7 +174,33 @@ class AiTimeEstimator {
         '${promptParts.join('\n')}\n\nДанные:\n${jsonEncode(payload)}';
 
     final raw = await _agent.completePrompt(prompt);
-    return _parseResponse(
+    return parseRawResponse(
+      raw: raw,
+      periodStart: periodStart,
+      periodEnd: periodEnd,
+      minutesPerWorkDay: minutesPerWorkDay,
+      contexts: contexts,
+      existingContexts: forExisting,
+      calculationOptions: calculationOptions,
+    );
+  }
+
+  /// Разбор JSON-ответа Cursor Agent (в т.ч. вставленного вручную).
+  static AiEstimationResult parseRawResponse({
+    required String raw,
+    required DateTime periodStart,
+    required DateTime periodEnd,
+    int minutesPerWorkDay = 480,
+    List<IssueContext> contexts = const [],
+    List<IssueContext> existingContexts = const [],
+    PlanCalculationOptions calculationOptions = const PlanCalculationOptions(),
+  }) {
+    final workingDays =
+        calculationOptions.workingDays(periodStart, periodEnd);
+    final forExisting =
+        existingContexts.isNotEmpty ? existingContexts : contexts;
+    final existingByDay = _existingMinutesByDayStatic(forExisting);
+    return _parseResponseStatic(
       raw,
       workingDays,
       minutesPerWorkDay,
@@ -185,7 +211,7 @@ class AiTimeEstimator {
   }
 
   /// Сжимает распределение: обычная задача — не более 3 дней в периоде.
-  List<TimeEstimate> _consolidateEstimates(
+  static List<TimeEstimate> _consolidateEstimates(
     List<TimeEstimate> estimates,
     List<IssueContext> contexts,
   ) {
@@ -233,7 +259,12 @@ class AiTimeEstimator {
     return result;
   }
 
-  Map<String, int> _existingMinutesByDay(List<IssueContext> contexts) {
+  Map<String, int> _existingMinutesByDay(List<IssueContext> contexts) =>
+      _existingMinutesByDayStatic(contexts);
+
+  static Map<String, int> _existingMinutesByDayStatic(
+    List<IssueContext> contexts,
+  ) {
     final map = <String, int>{};
     for (final ctx in contexts) {
       for (final w in ctx.existingWorkItems) {
@@ -244,7 +275,7 @@ class AiTimeEstimator {
     return map;
   }
 
-  AiEstimationResult _parseResponse(
+  static AiEstimationResult _parseResponseStatic(
     String raw,
     List<DateTime> workingDays,
     int minutesPerWorkDay,
@@ -277,7 +308,7 @@ class AiTimeEstimator {
   }
 
   /// Приводит сумму по каждому дню к [minutesPerWorkDay] (пропорционально).
-  List<TimeEstimate> _normalizePerDay(
+  static List<TimeEstimate> _normalizePerDay(
     List<TimeEstimate> estimates,
     List<DateTime> workingDays,
     int minutesPerWorkDay,
@@ -329,7 +360,7 @@ class AiTimeEstimator {
     return result;
   }
 
-  String _extractJson(String raw) {
+  static String _extractJson(String raw) {
     final trimmed = raw.trim();
     final fenceStart = trimmed.indexOf('```');
     if (fenceStart >= 0) {

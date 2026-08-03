@@ -44,6 +44,10 @@ abstract final class DesignTokens {
   static const surfaceHigh = AppColors.surfaceHigh;
   static const border = AppColors.border;
   static const borderSubtle = Color(0xFF252D3D);
+  static const workArea = Color(0xFF10141C);
+  static const tableZebra = Color(0xFF141A24);
+  static const tableSelected = Color(0xFF1E2A42);
+  static const tableSelectedBorder = Color(0xFF4A6FA5);
   static const accent = AppColors.primary;
   static const accentHover = Color(0xFF8B7DF5);
   static const accentMuted = AppColors.primarySoft;
@@ -153,12 +157,12 @@ class VariantTokens {
   );
 
   static const large = VariantTokens(
-    sidebarWidth: 240,
-    sidebarCompactWidth: 56,
-    detailsPanelWidth: 360,
-    detailsPanelMinWidth: 280,
-    topBarHeight: 48,
-    statusBarHeight: 28,
+    sidebarWidth: 260,
+    sidebarCompactWidth: 48,
+    detailsPanelWidth: 380,
+    detailsPanelMinWidth: 300,
+    topBarHeight: 80,
+    statusBarHeight: 26,
     panelPadding: EdgeInsets.all(DesignTokens.space4),
     listItemPadding: EdgeInsets.symmetric(
       horizontal: DesignTokens.space4,
@@ -169,7 +173,7 @@ class VariantTokens {
     body: 14,
     caption: 12,
     lineHeight: 1.5,
-    buttonRadius: DesignTokens.radiusSm,
+    buttonRadius: 0,
     useGradients: false,
     tableRowHeight: 40,
     tableCompactMode: true,

@@ -5,6 +5,8 @@ import 'package:youtrack_timer/models/gitlab/gitlab_ai_summary.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/providers/gitlab_provider.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_ai_summary_markdown.dart';
 import 'package:youtrack_timer/utils/date_utils.dart';
 
@@ -61,39 +63,45 @@ class _GitLabAiSummaryPanelState extends ConsumerState<GitLabAiSummaryPanel> {
         _sameScope(gitLab.aiSummaryErrorDay) &&
         !loading;
     final isDay = widget.day != null;
+    final p = context.palette;
 
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.primary.withValues(alpha: 0.08),
-            AppColors.card,
-          ],
-        ),
-      ),
-      padding: const EdgeInsets.all(16),
+      decoration: p.isOneC
+          ? OneCDecorations.raised(p)
+          : BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.border),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.08),
+                  AppColors.card,
+                ],
+              ),
+            ),
+      padding: EdgeInsets.all(p.isOneC ? 10 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(10),
+              if (p.isOneC)
+                Icon(Icons.auto_awesome_rounded, size: 18, color: p.link)
+              else
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 18,
-                  color: AppColors.primary,
-                ),
-              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -101,18 +109,19 @@ class _GitLabAiSummaryPanelState extends ConsumerState<GitLabAiSummaryPanel> {
                   children: [
                     Text(
                       isDay ? 'AI-сводка за день' : 'AI-сводка за период',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                        fontSize: p.isOneC ? 12 : 14,
+                        color: p.textPrimary,
                       ),
                     ),
                     Text(
                       hasCursor
                           ? 'Cursor Agent проанализирует активность'
                           : 'Укажите CURSOR_API_KEY в настройках',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textMuted,
+                        color: p.textMuted,
                       ),
                     ),
                   ],
@@ -157,29 +166,29 @@ class _GitLabAiSummaryPanelState extends ConsumerState<GitLabAiSummaryPanel> {
             ],
           ),
           if (!hasComparison)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'Для сводки с YouTrack выполните «Сверка с YouTrack»',
-                style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                style: TextStyle(fontSize: 10, color: p.textMuted),
               ),
             ),
           if (loading) ...[
             const SizedBox(height: 16),
-            const Row(
+            Row(
               children: [
                 SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: p.link),
                 ),
-                SizedBox(width: 12),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Cursor Agent формирует сводку…',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: p.textSecondary,
                     ),
                   ),
                 ),
@@ -191,12 +200,13 @@ class _GitLabAiSummaryPanelState extends ConsumerState<GitLabAiSummaryPanel> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
+                color: p.danger.withValues(alpha: p.isOneC ? 0.08 : 0.1),
+                border: p.isOneC ? Border.all(color: p.danger) : null,
+                borderRadius: p.isOneC ? null : BorderRadius.circular(10),
               ),
               child: Text(
                 gitLab.aiSummaryError,
-                style: const TextStyle(fontSize: 12, color: AppColors.danger),
+                style: TextStyle(fontSize: 12, color: p.danger),
               ),
             ),
           ],
@@ -209,15 +219,15 @@ class _GitLabAiSummaryPanelState extends ConsumerState<GitLabAiSummaryPanel> {
                       ? Icons.compare_arrows
                       : Icons.hub_outlined,
                   size: 14,
-                  color: AppColors.textMuted,
+                  color: p.textMuted,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   '${summary.withYouTrack ? 'GitLab + YouTrack' : 'GitLab'} · '
                   '${DateFormat('HH:mm').format(summary.generatedAt)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
-                    color: AppColors.textMuted,
+                    color: p.textMuted,
                   ),
                 ),
                 const Spacer(),
@@ -233,12 +243,14 @@ class _GitLabAiSummaryPanelState extends ConsumerState<GitLabAiSummaryPanel> {
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceHigh,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
+              padding: EdgeInsets.all(p.isOneC ? 8 : 14),
+              decoration: p.isOneC
+                  ? OneCDecorations.sunken(p)
+                  : BoxDecoration(
+                      color: AppColors.surfaceHigh,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
               child: GitLabAiSummaryMarkdown(data: summary.text),
             ),
           ],

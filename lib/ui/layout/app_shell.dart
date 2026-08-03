@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtrack_timer/providers/design_variant_provider.dart';
+import 'package:youtrack_timer/ui/theme/app_theme.dart';
 import 'package:youtrack_timer/ui/theme/design_tokens.dart';
 import 'package:youtrack_timer/ui/theme/design_variant.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
+import 'package:youtrack_timer/ui/widgets/panel_resize_handle.dart';
 
 /// Оболочка приложения: выбирает current/large layout и сохраняет состояние панелей.
 class AppShell extends ConsumerWidget {
@@ -40,14 +43,18 @@ class AppShell extends ConsumerWidget {
         );
 
         return ctx.isLarge
-            ? _LargeShell(
-                ctx: ctx,
-                sidebar: sidebar,
-                topBar: topBar,
-                content: content,
-                detailsPanel: detailsPanel,
-                statusBar: statusBar,
-                bottomPanel: bottomPanel,
+            ? Theme(
+                data: AppTheme.oneC(),
+                child: _LargeShell(
+                  ctx: ctx,
+                  palette: ctx.palette,
+                  sidebar: sidebar,
+                  topBar: topBar,
+                  content: content,
+                  detailsPanel: detailsPanel,
+                  statusBar: statusBar,
+                  bottomPanel: bottomPanel,
+                ),
               )
             : _CurrentShell(
                 sidebar: sidebar,
@@ -97,6 +104,7 @@ class _CurrentShell extends StatelessWidget {
 class _LargeShell extends ConsumerWidget {
   const _LargeShell({
     required this.ctx,
+    required this.palette,
     required this.sidebar,
     required this.topBar,
     required this.content,
@@ -106,6 +114,7 @@ class _LargeShell extends ConsumerWidget {
   });
 
   final DesignVariantContext ctx;
+  final VariantPalette palette;
   final Widget sidebar;
   final Widget topBar;
   final Widget content;
@@ -125,22 +134,31 @@ class _LargeShell extends ConsumerWidget {
           )
         : tokens.sidebarCompactWidth;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AnimatedContainer(
-                duration: DesignTokens.durationNormal,
-                curve: DesignTokens.curveStandard,
-                width: navWidth,
-                child: sidebar,
-              ),
-              _ResizeHandle(
-                axis: Axis.horizontal,
-                onDrag: (delta) {
+    return ColoredBox(
+      color: palette.window,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AnimatedContainer(
+                  duration: DesignTokens.durationNormal,
+                  curve: DesignTokens.curveStandard,
+                  width: navWidth,
+                  decoration: BoxDecoration(
+                    color: palette.panel,
+                    border: Border(
+                      right: BorderSide(color: palette.border),
+                    ),
+                  ),
+                  child: sidebar,
+                ),
+                PanelResizeHandle(
+                  palette: palette,
+                  axis: Axis.horizontal,
+                  onDrag: (delta) {
                   ref.read(shellLayoutProvider.notifier).setLeftNavWidth(
                         (layout.leftNavWidth + delta).clamp(
                           tokens.sidebarCompactWidth,
@@ -155,12 +173,15 @@ class _LargeShell extends ConsumerWidget {
                   children: [
                     topBar,
                     Expanded(
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth: DesignTokens.contentMaxWidth,
+                      child: ColoredBox(
+                        color: palette.workArea,
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              maxWidth: DesignTokens.contentMaxWidth,
+                            ),
+                            child: content,
                           ),
-                          child: content,
                         ),
                       ),
                     ),
@@ -169,7 +190,8 @@ class _LargeShell extends ConsumerWidget {
                 ),
               ),
               if (detailsPanel != null && layout.detailsPanelOpen) ...[
-                _ResizeHandle(
+                PanelResizeHandle(
+                  palette: palette,
                   axis: Axis.horizontal,
                   onDrag: (delta) {
                     ref.read(shellLayoutProvider.notifier).setDetailsPanelWidth(
@@ -192,49 +214,7 @@ class _LargeShell extends ConsumerWidget {
         ),
         if (statusBar != null)
           SizedBox(height: tokens.statusBarHeight, child: statusBar),
-      ],
-    );
-  }
-}
-
-class _ResizeHandle extends StatefulWidget {
-  const _ResizeHandle({
-    required this.axis,
-    required this.onDrag,
-  });
-
-  final Axis axis;
-  final ValueChanged<double> onDrag;
-
-  @override
-  State<_ResizeHandle> createState() => _ResizeHandleState();
-}
-
-class _ResizeHandleState extends State<_ResizeHandle> {
-  var _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      cursor: widget.axis == Axis.horizontal
-          ? SystemMouseCursors.resizeColumn
-          : SystemMouseCursors.resizeRow,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragUpdate: widget.axis == Axis.horizontal
-            ? (d) => widget.onDrag(d.delta.dx)
-            : null,
-        onVerticalDragUpdate: widget.axis == Axis.vertical
-            ? (d) => widget.onDrag(d.delta.dy)
-            : null,
-        child: AnimatedContainer(
-          duration: DesignTokens.durationFast,
-          width: widget.axis == Axis.horizontal ? 4 : null,
-          height: widget.axis == Axis.vertical ? 4 : null,
-          color: _hovered ? DesignTokens.accentMuted : DesignTokens.borderSubtle,
-        ),
+        ],
       ),
     );
   }

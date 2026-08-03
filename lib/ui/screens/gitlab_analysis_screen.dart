@@ -6,6 +6,10 @@ import 'package:youtrack_timer/providers/gitlab_provider.dart';
 import 'package:youtrack_timer/ui/screens/gitlab_day_detail_screen.dart';
 import 'package:youtrack_timer/ui/screens/gitlab_settings_screen.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
+import 'package:youtrack_timer/providers/design_variant_provider.dart';
+import 'package:youtrack_timer/ui/layout/variant_scaffold.dart';
+import 'package:youtrack_timer/ui/widgets/business/business_toolbar.dart';
+import 'package:youtrack_timer/ui/widgets/business/one_c_title_bar.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_ai_summary_panel.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_activity_calendar.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_activity_charts.dart';
@@ -14,6 +18,7 @@ import 'package:youtrack_timer/ui/widgets/gitlab/gitlab_metrics_dashboard.dart';
 import 'package:youtrack_timer/ui/widgets/gitlab/youtrack_gitlab_comparison_view.dart';
 import 'package:youtrack_timer/ui/widgets/loading_progress_view.dart';
 import 'package:youtrack_timer/ui/widgets/period_selector.dart';
+import 'package:youtrack_timer/ui/widgets/ui_error_banner.dart';
 
 /// GitLab + YouTrack Analysis — аналитика по коммитам, веткам и задачам.
 class GitLabAnalysisScreen extends ConsumerStatefulWidget {
@@ -58,26 +63,39 @@ class _GitLabAnalysisScreenState extends ConsumerState<GitLabAnalysisScreen>
     final gitLab = ref.watch(gitLabProvider);
     final settings = ref.watch(settingsProvider).valueOrNull;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('GitLab + YouTrack Analysis'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Настройки GitLab',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const GitLabSettingsScreen(),
+    final isLarge = ref.watch(designVariantProvider).isLarge;
+    final p = ref.watch(designVariantProvider).palette;
+
+    return VariantScaffold(
+      title: 'GitLab + YouTrack',
+      subtitle: 'Аналитика активности',
+      toolbarActions: isLarge
+          ? [
+              OneCToolbarButton(
+                palette: p,
+                label: 'Настройки',
+                icon: Icons.settings_outlined,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const GitLabSettingsScreen(),
+                  ),
+                ),
               ),
-            ),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-        ],
-      ),
+            ]
+          : null,
+      actions: isLarge
+          ? null
+          : [
+              IconButton(
+                tooltip: 'Настройки GitLab',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const GitLabSettingsScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.settings_outlined),
+              ),
+            ],
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -96,7 +114,7 @@ class _GitLabAnalysisScreenState extends ConsumerState<GitLabAnalysisScreen>
           if (gitLab.statusMessage.isNotEmpty || gitLab.isLoading)
             _StatusStrip(gitLab: gitLab),
           if (gitLab.errorMessage.isNotEmpty)
-            _ErrorBanner(message: gitLab.errorMessage),
+            UiErrorBanner(message: gitLab.errorMessage),
           Expanded(
             child: gitLab.isLoading && gitLab.activity == null
                 ? Padding(
@@ -144,7 +162,7 @@ class _GitLabAnalysisScreenState extends ConsumerState<GitLabAnalysisScreen>
   }
 }
 
-class _Toolbar extends StatelessWidget {
+class _Toolbar extends ConsumerWidget {
   const _Toolbar({
     required this.gitLab,
     required this.settingsOk,
@@ -164,98 +182,136 @@ class _Toolbar extends StatelessWidget {
   final void Function(DateTime, DateTime) onPeriodChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(designVariantProvider).palette;
+    final isLarge = p.isOneC;
+
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      padding: EdgeInsets.all(isLarge ? 8 : 16),
+      decoration: BoxDecoration(
+        color: isLarge ? p.toolbar : AppColors.surface,
+        border: Border(bottom: BorderSide(color: p.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              if (gitLab.user != null) ...[
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: AppColors.primarySoft,
-                  child: Text(
-                    gitLab.user!.displayName.isNotEmpty
-                        ? gitLab.user!.displayName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
+          if (gitLab.user != null)
+            Row(
+              children: [
+                if (!isLarge)
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AppColors.primarySoft,
+                    child: Text(
+                      gitLab.user!.displayName.isNotEmpty
+                          ? gitLab.user!.displayName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
+                if (!isLarge) const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         gitLab.user!.displayName,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: isLarge ? 12 : 14,
+                          color: p.textPrimary,
+                        ),
                       ),
                       Text(
                         gitLab.activity?.isDemo == true
                             ? 'Демо-режим'
                             : '@${gitLab.user!.username}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textMuted,
-                        ),
+                        style: TextStyle(fontSize: 11, color: p.textMuted),
                       ),
                     ],
                   ),
                 ),
-              ] else
-                const Expanded(
-                  child: Text(
-                    'GitLab не подключён',
-                    style: TextStyle(color: AppColors.textMuted),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
+              ],
+            )
+          else
+            Text(
+              'GitLab не подключён',
+              style: TextStyle(color: p.textMuted, fontSize: 12),
+            ),
+          SizedBox(height: isLarge ? 8 : 12),
           PeriodSelector(
             start: gitLab.startDate,
             end: gitLab.endDate,
             enabled: !gitLab.isLoading,
             onChanged: onPeriodChanged,
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton.icon(
-                onPressed: gitLab.isLoading ? null : onRefresh,
-                icon: const Icon(Icons.cloud_download_outlined, size: 18),
-                label: const Text('Обновить данные'),
-              ),
-              OutlinedButton.icon(
-                onPressed: gitLab.isLoading ? null : onRecalculate,
-                icon: const Icon(Icons.analytics_outlined, size: 18),
-                label: const Text('Пересчитать'),
-              ),
-              if (gitLab.activity != null)
-                OutlinedButton.icon(
-                  onPressed: gitLab.isLoading ? null : onLoadYouTrack,
-                  icon: const Icon(Icons.cloud_outlined, size: 18),
-                  label: const Text('Сверка с YouTrack'),
+          SizedBox(height: isLarge ? 8 : 12),
+          if (isLarge)
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                OneCToolbarButton(
+                  palette: p,
+                  label: 'Обновить',
+                  icon: Icons.cloud_download_outlined,
+                  emphasis: true,
+                  onPressed: gitLab.isLoading ? null : onRefresh,
                 ),
-              if (!settingsOk)
-                OutlinedButton.icon(
-                  onPressed: gitLab.isLoading ? null : onDemo,
-                  icon: const Icon(Icons.science_outlined, size: 18),
-                  label: const Text('Демо'),
+                OneCToolbarButton(
+                  palette: p,
+                  label: 'Пересчитать',
+                  icon: Icons.analytics_outlined,
+                  onPressed: gitLab.isLoading ? null : onRecalculate,
                 ),
-            ],
-          ),
+                if (gitLab.activity != null)
+                  OneCToolbarButton(
+                    palette: p,
+                    label: 'Сверка YT',
+                    icon: Icons.cloud_outlined,
+                    onPressed: gitLab.isLoading ? null : onLoadYouTrack,
+                  ),
+                if (!settingsOk)
+                  OneCToolbarButton(
+                    palette: p,
+                    label: 'Демо',
+                    icon: Icons.science_outlined,
+                    onPressed: gitLab.isLoading ? null : onDemo,
+                  ),
+              ],
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: gitLab.isLoading ? null : onRefresh,
+                  icon: const Icon(Icons.cloud_download_outlined, size: 18),
+                  label: const Text('Обновить данные'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: gitLab.isLoading ? null : onRecalculate,
+                  icon: const Icon(Icons.analytics_outlined, size: 18),
+                  label: const Text('Пересчитать'),
+                ),
+                if (gitLab.activity != null)
+                  OutlinedButton.icon(
+                    onPressed: gitLab.isLoading ? null : onLoadYouTrack,
+                    icon: const Icon(Icons.cloud_outlined, size: 18),
+                    label: const Text('Сверка с YouTrack'),
+                  ),
+                if (!settingsOk)
+                  OutlinedButton.icon(
+                    onPressed: gitLab.isLoading ? null : onDemo,
+                    icon: const Icon(Icons.science_outlined, size: 18),
+                    label: const Text('Демо'),
+                  ),
+              ],
+            ),
         ],
       ),
     );
@@ -285,33 +341,7 @@ class _StatusStrip extends StatelessWidget {
   }
 }
 
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
-          const SizedBox(width: 10),
-          Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
-        ],
-      ),
-    );
-  }
-}
-
-class _AnalysisContent extends StatefulWidget {
+class _AnalysisContent extends ConsumerStatefulWidget {
   const _AnalysisContent({
     required this.gitLab,
     required this.tabController,
@@ -325,30 +355,37 @@ class _AnalysisContent extends StatefulWidget {
   final String? youTrackBaseUrl;
 
   @override
-  State<_AnalysisContent> createState() => _AnalysisContentState();
+  ConsumerState<_AnalysisContent> createState() => _AnalysisContentState();
 }
 
-class _AnalysisContentState extends State<_AnalysisContent> {
+class _AnalysisContentState extends ConsumerState<_AnalysisContent> {
   DateTime? _selectedDay;
 
   void _openDay(DateTime day) {
-    setState(() => _selectedDay = day);
     final activity = widget.gitLab.activity;
     if (activity == null) return;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => GitLabDayDetailScreen(
-          activity: activity,
-          date: day,
+
+    // Навигация после завершения жеста — иначе gesture arena / mouse_tracker.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _selectedDay = day);
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => GitLabDayDetailScreen(
+            activity: activity,
+            date: day,
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final activity = widget.gitLab.activity!;
     final metrics = activity.metrics;
+    final isLarge = ref.watch(designVariantProvider).isLarge;
+    final p = ref.watch(designVariantProvider).palette;
     final activeDays = metrics.dailySummaries
         .where((d) => d.commitCount > 0 || d.branchesTouched > 0)
         .toList()
@@ -357,12 +394,22 @@ class _AnalysisContentState extends State<_AnalysisContent> {
 
     return Column(
       children: [
+        if (isLarge)
+          BusinessTabStrip(
+            palette: p,
+            tabController: widget.tabController,
+            tabs: const [
+              (icon: Icons.dashboard_outlined, label: 'Обзор'),
+              (icon: Icons.insights_outlined, label: 'Графики'),
+              (icon: Icons.compare_arrows, label: 'YouTrack'),
+            ],
+          ),
         Expanded(
           child: TabBarView(
             controller: widget.tabController,
             children: [
               ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                padding: EdgeInsets.fromLTRB(isLarge ? 8 : 16, 8, isLarge ? 8 : 16, 16),
                 children: [
                   GitLabMetricsDashboard(
                     metrics: metrics,
@@ -380,10 +427,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
                     const SizedBox(height: 20),
                     const Text(
                       'Активные дни',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 4),
                     const Text(
@@ -441,54 +485,55 @@ class _AnalysisContentState extends State<_AnalysisContent> {
             ],
           ),
         ),
-        Container(
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceHigh,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+        if (!isLarge)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceHigh,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: TabBar(
+              controller: widget.tabController,
+              indicatorPadding: const EdgeInsets.all(4),
+              dividerHeight: 0,
+              tabs: const [
+                Tab(
+                  height: 36,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.dashboard_outlined, size: 16),
+                      SizedBox(width: 6),
+                      Text('Обзор'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 36,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.insights_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text('Графики'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 36,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.compare_arrows, size: 16),
+                      SizedBox(width: 6),
+                      Text('YouTrack'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: TabBar(
-            controller: widget.tabController,
-            indicatorPadding: const EdgeInsets.all(4),
-            dividerHeight: 0,
-            tabs: const [
-              Tab(
-                height: 36,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.dashboard_outlined, size: 16),
-                    SizedBox(width: 6),
-                    Text('Обзор'),
-                  ],
-                ),
-              ),
-              Tab(
-                height: 36,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.insights_rounded, size: 16),
-                    SizedBox(width: 6),
-                    Text('Графики'),
-                  ],
-                ),
-              ),
-              Tab(
-                height: 36,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.compare_arrows, size: 16),
-                    SizedBox(width: 6),
-                    Text('YouTrack'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }

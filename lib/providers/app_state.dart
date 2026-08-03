@@ -678,6 +678,95 @@ class HomeNotifier extends StateNotifier<HomeState> {
     }
   }
 
+  /// Строит план за выбранный период из готового JSON Cursor Agent
+  /// (YouTrack + разбор JSON, без ожидания cloud agent).
+  Future<bool> buildPlanFromCursorJson(String rawJson) async {
+    final settings = _ref.read(settingsProvider).valueOrNull;
+    if (settings == null || !settings.hasYouTrack) {
+      _log.warn(LogCategory.app, 'Заполните настройки YouTrack');
+      return false;
+    }
+    if (state.startDate == null || state.endDate == null) {
+      _log.warn(LogCategory.plan, 'Сначала выберите период');
+      return false;
+    }
+
+    final trimmed = rawJson.trim();
+    if (trimmed.isEmpty) {
+      _log.warn(LogCategory.cursor, 'Пустой JSON Cursor Agent');
+      return false;
+    }
+
+    _log.clear();
+    _log.info(LogCategory.plan, 'Построение плана из JSON Cursor…');
+    final tracker = _tracker('План из JSON Cursor', 6);
+    tracker.start('Подключение к YouTrack');
+
+    try {
+      final normalized = settings.normalized();
+      final config = AppConfig(
+        baseUrl: normalized.youTrackUrl,
+        token: normalized.youTrackToken,
+        startDate: state.startDate!,
+        endDate: state.endDate!,
+        dryRun: settings.dryRun,
+      );
+
+      _log.info(
+        LogCategory.plan,
+        'Период: ${state.startDate!.toIso8601String().substring(0, 10)}'
+        ' — ${state.endDate!.toIso8601String().substring(0, 10)}',
+      );
+
+      final ytClient = YouTrackClient(config);
+      await ytClient.ping();
+      _log.success(LogCategory.youtrack, 'Подключение к YouTrack OK');
+      _log.info(
+        LogCategory.cursor,
+        'Cursor Agent API не вызывается — используем вставленный JSON',
+      );
+
+      final builder = PlanBuilderService(
+        youTrackClient: ytClient,
+        minutesPerWorkDay: state.minutesPerWorkDay,
+      );
+
+      final result = await builder.buildPlanFromAiJson(
+        start: state.startDate!,
+        end: state.endDate!,
+        rawJson: trimmed,
+        calculationOptions: state.calculationOptions,
+        progress: tracker,
+      );
+
+      ytClient.close();
+
+      final summary = 'AI из JSON: ${result.entries.length} записей';
+      if (result.aiSummary.isNotEmpty) {
+        _log.info(LogCategory.cursor, 'Вывод AI: ${result.aiSummary}');
+      }
+      _log.success(LogCategory.plan, summary);
+      _log.info(LogCategory.plan, 'Задач: ${result.issues.length}');
+
+      state = state.copyWith(
+        isLoading: false,
+        clearLoadingProgress: true,
+        plan: result,
+        statusMessage: summary,
+        excludedIssueIds: {},
+      );
+      return true;
+    } on YouTrackApiException catch (e, st) {
+      _log.error(LogCategory.youtrack, e.message, e, st);
+      _finishLoading(statusMessage: 'Ошибка YouTrack');
+      rethrow;
+    } catch (e, st) {
+      _log.error(LogCategory.plan, 'Сбой плана из JSON Cursor', e, st);
+      _finishLoading(statusMessage: 'Ошибка JSON Cursor');
+      rethrow;
+    }
+  }
+
   @override
   void dispose() {
     _recalcDebounce?.cancel();

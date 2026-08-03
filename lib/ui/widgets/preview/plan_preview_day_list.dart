@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:youtrack_timer/models/plan_preview_entry.dart';
 import 'package:youtrack_timer/ui/theme/app_colors.dart';
 import 'package:youtrack_timer/ui/theme/design_tokens.dart';
+import 'package:youtrack_timer/ui/theme/one_c_decorations.dart';
+import 'package:youtrack_timer/ui/theme/variant_palette.dart';
 import 'package:youtrack_timer/ui/utils/time_format.dart';
 import 'package:youtrack_timer/ui/widgets/youtrack_issue_link.dart';
 
@@ -22,16 +24,18 @@ class PlanPreviewDayList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (days.isEmpty) {
-      return const Center(
+      final p = context.palette;
+      return Center(
         child: Text(
           'Нет рабочих дней в периоде',
-          style: TextStyle(color: AppColors.textMuted),
+          style: TextStyle(color: p.textMuted),
         ),
       );
     }
 
+    final p = context.palette;
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: EdgeInsets.fromLTRB(p.isOneC ? 8 : 16, 8, p.isOneC ? 8 : 16, 24),
       itemCount: days.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, i) => _DayCard(
@@ -56,36 +60,41 @@ class _DayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final fmt = DateFormat('EEEE, d MMMM', 'ru');
     final meets = day.meetsTarget;
 
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: p.isOneC
+          ? OneCDecorations.flatPanel(p)
+          : BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+              border: Border.all(color: AppColors.border),
+            ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: const BoxDecoration(
-              color: AppColors.surfaceHigh,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: p.isOneC ? p.panelHeader : AppColors.surfaceHigh,
+              border: Border(bottom: BorderSide(color: p.border)),
             ),
             child: Row(
               children: [
                 Text(
                   fmt.format(day.day),
-                  style: const TextStyle(
-                    fontSize: 13,
+                  style: TextStyle(
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
+                    color: p.textPrimary,
                   ),
                 ),
                 const Spacer(),
                 _TotalBadge(
+                  palette: p,
                   total: day.totalMinutes,
                   target: day.targetMinutes,
                   meets: meets,
@@ -94,16 +103,17 @@ class _DayCard extends StatelessWidget {
             ),
           ),
           if (day.rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: Text(
                 'Нет записей',
-                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                style: TextStyle(fontSize: 11, color: p.textMuted),
               ),
             )
           else
             for (var i = 0; i < day.rows.length; i++)
               _IssueRow(
+                palette: p,
                 row: day.rows[i],
                 baseUrl: baseUrl,
                 isLast: i == day.rows.length - 1,
@@ -119,10 +129,13 @@ class _DayCard extends StatelessWidget {
 
 class _TotalBadge extends StatelessWidget {
   const _TotalBadge({
+    required this.palette,
     required this.total,
     required this.target,
     required this.meets,
   });
+
+  final VariantPalette palette;
 
   final int total;
   final int target;
@@ -130,7 +143,13 @@ class _TotalBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = meets ? AppColors.success : AppColors.warning;
+    final color = meets ? palette.success : palette.warning;
+    if (palette.isOneC) {
+      return Text(
+        '${TimeFormat.minutes(total)} / ${TimeFormat.minutes(target)}',
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -152,11 +171,14 @@ class _TotalBadge extends StatelessWidget {
 
 class _IssueRow extends StatelessWidget {
   const _IssueRow({
+    required this.palette,
     required this.row,
     required this.baseUrl,
     required this.isLast,
     this.onTap,
   });
+
+  final VariantPalette palette;
 
   final PlanPreviewRow row;
   final String baseUrl;
@@ -177,7 +199,7 @@ class _IssueRow extends StatelessWidget {
           decoration: BoxDecoration(
             border: isLast
                 ? null
-                : const Border(bottom: BorderSide(color: AppColors.border)),
+                : Border(bottom: BorderSide(color: palette.border)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +213,7 @@ class _IssueRow extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: isSkip ? AppColors.textMuted : AppColors.primary,
+                    color: isSkip ? palette.textMuted : palette.link,
                     decoration:
                         isSkip ? TextDecoration.lineThrough : TextDecoration.underline,
                   ),
@@ -204,9 +226,7 @@ class _IssueRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isSkip
-                        ? AppColors.textMuted
-                        : AppColors.textSecondary,
+                    color: isSkip ? palette.textMuted : palette.textSecondary,
                     height: 1.35,
                   ),
                 ),
@@ -217,14 +237,15 @@ class _IssueRow extends StatelessWidget {
                 children: [
                   Text(
                     TimeFormat.minutes(row.totalMinutes),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
+                      color: palette.textPrimary,
                     ),
                   ),
                   if (row.hasPlanned) ...[
                     const SizedBox(height: 2),
-                    _StatusBadge(isNew: isNew, isSkip: isSkip),
+                    _StatusBadge(palette: palette, isNew: isNew, isSkip: isSkip),
                   ],
                 ],
               ),
@@ -237,7 +258,13 @@ class _IssueRow extends StatelessWidget {
 }
 
 class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.isNew, required this.isSkip});
+  const _StatusBadge({
+    required this.palette,
+    required this.isNew,
+    required this.isSkip,
+  });
+
+  final VariantPalette palette;
 
   final bool isNew;
   final bool isSkip;
@@ -245,10 +272,17 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = isSkip
-        ? ('пропуск', AppColors.textMuted)
+        ? ('пропуск', palette.textMuted)
         : isNew
-            ? ('запишется', AppColors.accent)
-            : ('в YT', AppColors.existing);
+            ? ('запишется', palette.planned)
+            : ('в YT', palette.existing);
+
+    if (palette.isOneC) {
+      return Text(
+        label,
+        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

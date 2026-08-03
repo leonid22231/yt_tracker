@@ -19,3 +19,5 @@ pubspec.lock
 
 # FVM Version Cache
 .fvm/
+
+.ai/

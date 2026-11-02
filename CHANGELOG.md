@@ -7,7 +7,18 @@
 
 ## [Unreleased]
 
+### Исправлено
+
+- **Митап из подсказки AI** (`МИТАП 1Ч KIOSK-114`): агент отдавал задачу на все дни, но
+  `_consolidateEstimates` схлопывал обычные задачи до 3 дней и митап пропадал из плана.
+  Теперь hint парсится в `MeetupSettings`, задача защищена от схлопывания/ужимания,
+  `MeetupAllocator` добивает дни, промпт явно требует ежедневный митап.
+
 ### Добавлено
+
+- **Прокси для Cursor Agent** — настройка `CURSOR_PROXY` / поле в GUI (`host:port`).
+  Запросы к `api.cursor.com` идут через указанный HTTP-прокси (Windows/CLI via `HttpClient.findProxy`).
+  Fallback: `HTTPS_PROXY` / `HTTP_PROXY`. На web proxy из приложения не применяется.
 
 #### GitLab + YouTrack Analysis (новый модуль)
 

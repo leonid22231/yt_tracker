@@ -138,9 +138,14 @@ YOUTRACK_TOKEN=your-permanent-token-here
 
 # Cursor Agent (Cloud API) — для AI-оценки времени
 CURSOR_API_KEY=cursor_your_api_key_here
+
+# HTTP-прокси только для Cursor Agent (host:port). Опционально.
+# CURSOR_PROXY=127.0.0.1:7890
 ```
 
 При первом запуске GUI значения из `.env` **один раз** копируются в локальные настройки (SharedPreferences).
+
+Если `CURSOR_PROXY` не задан, подставляются `HTTPS_PROXY` / `HTTP_PROXY` (если есть). Прокси действует **только** на запросы к Cursor Cloud Agents API (Windows/CLI). В Chrome/web браузерный fetch не умеет задавать HTTP-прокси из приложения — используйте системный прокси ОС/браузера.
 
 ### Настройки в GUI
 
@@ -151,6 +156,7 @@ CURSOR_API_KEY=cursor_your_api_key_here
 | URL YouTrack | Нормализуется (без trailing slash, без `/api`) |
 | Токен YouTrack | Префикс `perm:` добавляется автоматически |
 | Cursor API key | Для AI-оценки |
+| Cursor proxy | `host:port` для Cursor API (опционально) |
 | Use AI | Включить/выключить Cursor Agent |
 | Dry-run | Блокирует запись в YouTrack |
 | GitLab URL | По умолчанию `https://gitlab.com` |

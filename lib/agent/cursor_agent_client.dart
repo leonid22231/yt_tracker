@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:youtrack_timer/agent/cursor_http_client_factory.dart';
+import 'package:youtrack_timer/agent/cursor_proxy.dart';
 import 'package:youtrack_timer/logging/app_log.dart';
 
 /// Клиент Cursor Cloud Agents API для AI-оценки времени.
@@ -10,11 +12,16 @@ class CursorAgentClient {
   CursorAgentClient({
     required this.apiKey,
     http.Client? httpClient,
+    String? proxy,
     this.baseUrl = 'https://api.cursor.com',
-  }) : _http = httpClient ?? http.Client();
+  })  : proxy = CursorProxy.normalize(proxy),
+        _http = httpClient ?? createCursorHttpClient(proxy: proxy);
 
   final String apiKey;
   final String baseUrl;
+
+  /// Канонический `host:port` или `null`, если прокси не задан.
+  final String? proxy;
   final http.Client _http;
 
   static const _pollInterval = Duration(seconds: 3);
@@ -31,6 +38,12 @@ class CursorAgentClient {
   /// Ожидание без лимита по времени — большие периоды (месяц) могут
   /// занимать 5+ минут. Прерывание только по ERROR / CANCELLED / EXPIRED.
   Future<String> completePrompt(String promptText) async {
+    if (proxy != null) {
+      AppLog.instance.info(
+        LogCategory.cursor,
+        'Запросы к Cursor API через прокси $proxy',
+      );
+    }
     AppLog.instance.info(LogCategory.cursor, 'Создание cloud agent…');
     final createUri = Uri.parse('$baseUrl/v1/agents');
     final body = jsonEncode({

@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:youtrack_timer/agent/cursor_proxy.dart';
 import 'package:youtrack_timer/config/env_loader.dart';
 import 'package:youtrack_timer/gitlab/gitlab_credentials.dart';
 import 'package:youtrack_timer/youtrack/youtrack_credentials.dart';
@@ -8,6 +9,7 @@ class SettingsStore {
   static const _keyBaseUrl = 'youtrack_url';
   static const _keyYoutrackToken = 'youtrack_token';
   static const _keyCursorKey = 'cursor_api_key';
+  static const _keyCursorProxy = 'cursor_proxy';
   static const _keyUseAi = 'use_ai';
   static const _keyDryRun = 'dry_run';
   static const _keyEnvSynced = 'env_synced_v1';
@@ -22,16 +24,24 @@ class SettingsStore {
     var url = prefs.getString(_keyBaseUrl) ?? '';
     var ytToken = prefs.getString(_keyYoutrackToken) ?? '';
     var cursorKey = prefs.getString(_keyCursorKey) ?? '';
+    var cursorProxy = prefs.getString(_keyCursorProxy) ?? '';
 
     // Подтянуть .env, если в UI ещё пусто или после обновления
     if (url.isEmpty) url = EnvLoader.get('YOUTRACK_URL') ?? '';
     if (ytToken.isEmpty) ytToken = EnvLoader.get('YOUTRACK_TOKEN') ?? '';
     if (cursorKey.isEmpty) cursorKey = EnvLoader.get('CURSOR_API_KEY') ?? '';
+    if (cursorProxy.isEmpty) {
+      cursorProxy = EnvLoader.get('CURSOR_PROXY') ??
+          EnvLoader.get('HTTPS_PROXY') ??
+          EnvLoader.get('HTTP_PROXY') ??
+          '';
+    }
 
     final settings = AppSettings(
       youTrackUrl: url,
       youTrackToken: ytToken,
       cursorApiKey: cursorKey,
+      cursorProxy: cursorProxy,
       useAi: prefs.getBool(_keyUseAi) ?? true,
       dryRun: prefs.getBool(_keyDryRun) ?? true,
       gitLabUrl: prefs.getString(_keyGitLabUrl) ?? 'https://gitlab.com',
@@ -54,6 +64,7 @@ class SettingsStore {
     await prefs.setString(_keyBaseUrl, n.youTrackUrl);
     await prefs.setString(_keyYoutrackToken, n.youTrackToken);
     await prefs.setString(_keyCursorKey, n.cursorApiKey);
+    await prefs.setString(_keyCursorProxy, n.cursorProxy);
     await prefs.setBool(_keyUseAi, n.useAi);
     await prefs.setBool(_keyDryRun, n.dryRun);
     await prefs.setString(_keyGitLabUrl, n.gitLabUrl);
@@ -67,6 +78,7 @@ class AppSettings {
     required this.youTrackUrl,
     required this.youTrackToken,
     required this.cursorApiKey,
+    this.cursorProxy = '',
     this.useAi = true,
     this.dryRun = true,
     this.gitLabUrl = 'https://gitlab.com',
@@ -77,6 +89,9 @@ class AppSettings {
   final String youTrackUrl;
   final String youTrackToken;
   final String cursorApiKey;
+
+  /// HTTP-прокси для Cursor Agent: `host:port` (пусто = без прокси).
+  final String cursorProxy;
   final bool useAi;
   final bool dryRun;
   final String gitLabUrl;
@@ -88,6 +103,8 @@ class AppSettings {
 
   bool get hasCursor => cursorApiKey.isNotEmpty;
 
+  bool get hasCursorProxy => cursorProxy.trim().isNotEmpty;
+
   bool get hasGitLab => gitLabToken.isNotEmpty || gitLabDemoMode;
 
   AppSettings normalized() {
@@ -97,6 +114,13 @@ class AppSettings {
         normalizedGitLabUrl =
             GitLabCredentials.normalizeBaseUrl(normalizedGitLabUrl);
       }
+      String normalizedProxy;
+      try {
+        normalizedProxy = CursorProxy.normalize(cursorProxy) ?? '';
+      } on ArgumentError {
+        // Невалидный proxy не ломает остальную нормализацию.
+        normalizedProxy = cursorProxy.trim();
+      }
       return AppSettings(
         youTrackUrl: youTrackUrl.isEmpty
             ? ''
@@ -105,6 +129,7 @@ class AppSettings {
             ? ''
             : YouTrackCredentials.normalizeToken(youTrackToken),
         cursorApiKey: cursorApiKey.trim(),
+        cursorProxy: normalizedProxy,
         useAi: useAi,
         dryRun: dryRun,
         gitLabUrl: normalizedGitLabUrl,
@@ -122,6 +147,7 @@ class AppSettings {
     String? youTrackUrl,
     String? youTrackToken,
     String? cursorApiKey,
+    String? cursorProxy,
     bool? useAi,
     bool? dryRun,
     String? gitLabUrl,
@@ -132,6 +158,7 @@ class AppSettings {
         youTrackUrl: youTrackUrl ?? this.youTrackUrl,
         youTrackToken: youTrackToken ?? this.youTrackToken,
         cursorApiKey: cursorApiKey ?? this.cursorApiKey,
+        cursorProxy: cursorProxy ?? this.cursorProxy,
         useAi: useAi ?? this.useAi,
         dryRun: dryRun ?? this.dryRun,
         gitLabUrl: gitLabUrl ?? this.gitLabUrl,

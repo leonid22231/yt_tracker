@@ -53,7 +53,7 @@ class _RecalcHintFieldState extends ConsumerState<RecalcHintField> {
           onChanged: ref.read(homeProvider.notifier).setRecalcHint,
           decoration: const InputDecoration(
             hintText:
-                'Напр.: 23 июня болел — не трекай. С 10 по 20 — митапы по 2 ч/день',
+                'Напр.: МИТАП 1Ч KIOSK-114. 23 июня болел — не трекай',
             isDense: true,
             contentPadding: EdgeInsets.all(12),
           ),

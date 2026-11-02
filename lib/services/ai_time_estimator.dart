@@ -20,36 +20,47 @@ class AiTimeEstimator {
 Ты аналитик трудозатрат в YouTrack. По истории задач оцени, сколько минут разумно 
 списать на каждую задачу в каждый рабочий день периода.
 
-ПРИОРИТЕТ userHint (если поле userHint задано в данных):
-- userHint — ГЛАВНЫЙ И ВЫСШИЙ приоритет при расчёте. Полагайся на него ОБЯЗАТЕЛЬНО.
-- Если userHint противоречит истории задач, оценкам, previousPlan или твоим эвристикам — 
-  ВЫПОЛНЯЙ userHint, а не «умные» догадки по контексту.
-- userHint переопределяет распределение по дням, задачам и минутам, пока не нарушает 
-  жёсткие лимиты (minutesPerWorkDay, existingWorkItems, excludedDates).
-- Примеры: «болел 23 июня» → 0 минут на этот день; «с 10 по 20 митапы по 2 ч» → 
-  каждый рабочий день диапазона — митап 120 мин.
+ПРИОРИТЕТ userHint (если поле userHint задано в данных) — ЖЁСТКОЕ ПРАВИЛО:
+- userHint — ГЛАВНЫЙ И ВЫСШИЙ приоритет. Выполняй ДОСЛОВНО, даже если история/оценки/
+  previousPlan/эвристики противоречат.
+- Короткие формы обязательны к разбору. Примеры:
+  • «МИТАП 1Ч KIOSK-114» / «митап 1 ч KIOSK-114» / «meetup 60м KIOSK-114»
+    → КАЖДЫЙ день из workingDays (кроме excludedDates и дат без митапа):
+      estimate на issueIdReadable=KIOSK-114, minutes = max(0, 60 - уже списано мной
+      на этот день по KIOSK-114). Это ЕЖЕДНЕВНАЯ задача, НЕ «1–3 дня».
+  • «болел 23 июня» → 0 минут на этот день по всем задачам.
+  • «с 10 по 20 митапы по 2 ч на PROJ-1» → каждый рабочий день диапазона:
+      PROJ-1 по 120 мин (дополнение к YT).
+- Если в userHint указан id задачи (PROJ-123) и длительность митапа — задача ДОЛЖНА
+  присутствовать в estimates на ВСЕ рабочие дни периода (кроме исключений).
+  Пропуск дня = ошибка. Не заменяй митап другими задачами.
+- userHint сильнее правила «обычные задачи на 1–3 дня».
 
 Правила:
 - Сумма минут на каждый рабочий день = minutesPerWorkDay (см. данные).
 - Задачи с isDaily=true — каждый рабочий день, обычно 30–90 мин.
-- Обычные задачи (не daily): НЕ дроби на все дни периода. Предпочитай 1–3 дня с основной активностью.
-- Крупные блоки (2–4 ч за раз) лучше, чем по 30–60 мин на каждый день подряд.
-- Если existingWorkItems уже есть на несколько дней — дополнительные минуты только на дни без списания или с малым списанием.
+- Задача митапа из userHint / meetupSettings — тоже каждый рабочий день
+  (как isDaily), пока не указано иное.
+- Обычные задачи (не daily и не митап): НЕ дроби на все дни периода.
+  Предпочитай 1–3 дня с основной активностью.
+- Крупные блоки (2–4 ч за раз) лучше, чем по 30–60 мин на каждый день подряд —
+  это правило НЕ для митапа.
+- Если existingWorkItems уже есть на несколько дней — дополнительные минуты только на дни без списания или с малым списанием (кроме митапа: добивай до целевых минут).
 - Учитывай смены статуса, комментарии, интенсивность активности.
 - ОБЯЗАТЕЛЬНО учитывай taskEstimateMinutes / taskEstimateRemainingMinutes — оценка задачи в YouTrack.
-- Сумма ДОПОЛНИТЕЛЬНЫХ минут по задаче за период не должна превышать taskEstimateRemainingMinutes (если поле задано).
-- Если оценка уже покрыта existingWorkItems — 0 дополнительных минут по этой задаче.
+- Сумма ДОПОЛНИТЕЛЬНЫХ минут по задаче за период не должна превышать taskEstimateRemainingMinutes (если поле задано). Для митапа из userHint/meetupSettings этот потолок НЕ применяй — митап важнее оценки.
+- Если оценка уже покрыта existingWorkItems — 0 дополнительных минут по этой задаче (кроме митапа).
 - ОБЯЗАТЕЛЬНО учитывай existingWorkItems — уже списанное **мной** время (existingWorkItemsScope=currentUserOnly; чужие записи в задаче не включены).
 - В estimates указывай ДОПОЛНИТЕЛЬНЫЕ минуты к уже списанному мной, не дублируй existingWorkItems.
 - Если на день уже списано >= лимита дня по этой задаче — 0 минут в estimates для этого дня.
-- Если задача неактивна в день — 0 минут, не включай в JSON.
+- Если задача неактивна в день — 0 минут, не включай в JSON (кроме митапа/daily).
 - Только рабочие дни (пн–пт) из списка workingDays.
 - excludedDates — дни, на которые НЕЛЬЗЯ ставить estimates (0 минут, не включай в JSON).
-- Если userHint задан — следуй ему в первую очередь (см. блок ПРИОРИТЕТ userHint выше).
 - meetupSettings (если задано) — minutesPerDay это ЦЕЛЕВОЙ итог митапа в день 
   (уже списанное в existingWorkItems + новые estimates). В estimates ставь только 
   ДОПОЛНИТЕЛЬНЫЕ минуты: max(0, minutesPerDay - списано на этот день по issueIdReadable).
   Если в YT уже >= minutesPerDay — 0 минут в estimates для этого дня по митапу.
+  Митап из meetupSettings и из userHint равнозначны; при конфликте бери явное поле meetupSettings.
 
 Ответь ТОЛЬКО валидным JSON без markdown:
 {
@@ -70,14 +81,16 @@ class AiTimeEstimator {
 РЕЖИМ ПЕРЕСЧЁТА (пользователь изменил лимиты или часы в день):
 - userHint (если есть) — ВЫСШИЙ ПРИОРИТЕТ. Пересчитывай план строго по userHint; 
   не сохраняй прежнее распределение, если оно ему противоречит.
+- «МИТАП 1Ч KIOSK-114» и аналоги — снова на КАЖДЫЙ workingDay (дополнение до целевых минут).
 - Распредели время заново с учётом existingWorkItems и existingMinutesByDay.
 - На каждый день: сумма ДОПОЛНИТЕЛЬНЫХ estimates по всем задачам <= minutesPerWorkDay минус existingMinutesByDay[день].
-- userBudgetMinutesForPeriod (если задано у задачи) — жёсткий лимит ДОПОЛНИТЕЛЬНЫХ минут на задачу за весь период; распредели по активным дням.
+- userBudgetMinutesForPeriod (если задано у задачи) — жёсткий лимит ДОПОЛНИТЕЛЬНЫХ минут на задачу за весь период; распредели по активным дням. На митап не распространяется.
 - previousPlan — предыдущее распределение (ориентир пропорций, не копируй слепо).
 - excludedFromPlan — ТОЛЬКО idReadable задач, которые пользователь убрал (остальные в issues — в плане).
 - excludedDates и userHint имеют приоритет над previousPlan и активностью в задачах: 
   на исключённые/больничные дни estimates = 0; митапы и прочее из userHint — как указано.
-- После твоего ответа приложение само добьёт недозаполненные дни другими задачами из пула.
+- После твоего ответа приложение само добьёт недозаполненные дни другими задачами из пула
+  и заново выровняет митап — но ты всё равно обязан включить митап во все дни.
 ''';
 
   Future<AiEstimationResult> estimate({
@@ -94,15 +107,15 @@ class AiTimeEstimator {
     /// Все задачи с вашим списанным временем (в т.ч. не assignee) — для лимита дня.
     List<IssueContext> existingContexts = const [],
   }) async {
+    final options = calculationOptions.resolveMeetupFromHint();
     final hint = userHint?.trim().isNotEmpty == true
         ? userHint!.trim()
-        : calculationOptions.trimmedHint;
-    final workingDays =
-        calculationOptions.workingDays(periodStart, periodEnd);
-    final excludedFormatted = calculationOptions.normalizedExcludedDates
+        : options.trimmedHint;
+    final workingDays = options.workingDays(periodStart, periodEnd);
+    final excludedFormatted = options.normalizedExcludedDates
         .map(DateUtils.formatForQuery)
         .toList();
-    final meetup = calculationOptions.meetup;
+    final meetup = options.meetup;
     final daysFormatted =
         workingDays.map(DateUtils.formatForQuery).toList();
     final forExisting =
@@ -147,7 +160,9 @@ class AiTimeEstimator {
     if (isRecalculation) promptParts.add(_recalculationPrompt);
     if (hint != null) {
       promptParts.add(
-        'ПРИОРИТЕТ userHint — ОБЯЗАТЕЛЬНО СЛЕДУЙ (это главный источник правды при расчёте):\n'
+        'ПРИОРИТЕТ userHint — ОБЯЗАТЕЛЬНО СЛЕДУЙ ДОСЛОВНО '
+        '(главный источник правды; короткие формы вроде '
+        '«МИТАП 1Ч KIOSK-114» = ежедневно 60 мин на KIOSK-114):\n'
         '$hint',
       );
     }
@@ -162,13 +177,20 @@ class AiTimeEstimator {
           .toList()
         ..sort();
       var meetupLine =
-          'Митап: ${meetup.issueIdReadable} — целевой итог ${meetup.minutesPerDay} мин/день '
+          'ЖЁСТКИЙ МИТАП: ${meetup.issueIdReadable} — целевой итог '
+          '${meetup.minutesPerDay} мин/день '
           '(включая уже списанное в YT; в estimates только дополнение) '
-          'на каждый рабочий день периода';
+          'на КАЖДЫЙ рабочий день из workingDays. '
+          'Нельзя пропускать дни и нельзя ограничивать 1–3 днями.';
       if (meetupExcluded.isNotEmpty) {
         meetupLine += ', кроме дат митапа: ${meetupExcluded.join(', ')}';
       }
       promptParts.add(meetupLine);
+      AppLog.instance.info(
+        LogCategory.cursor,
+        'Митап в промпте: ${meetup.issueIdReadable} '
+        '${meetup.minutesPerDay} мин/день',
+      );
     }
     final prompt =
         '${promptParts.join('\n')}\n\nДанные:\n${jsonEncode(payload)}';
@@ -181,7 +203,7 @@ class AiTimeEstimator {
       minutesPerWorkDay: minutesPerWorkDay,
       contexts: contexts,
       existingContexts: forExisting,
-      calculationOptions: calculationOptions,
+      calculationOptions: options,
     );
   }
 
@@ -211,14 +233,17 @@ class AiTimeEstimator {
   }
 
   /// Сжимает распределение: обычная задача — не более 3 дней в периоде.
+  /// Daily и митап ([protectedIssueIds]) не схлопываются.
   static List<TimeEstimate> _consolidateEstimates(
     List<TimeEstimate> estimates,
-    List<IssueContext> contexts,
-  ) {
-    final dailyIds = contexts
-        .where((c) => c.issue.isDaily)
-        .map((c) => c.issue.idReadable)
-        .toSet();
+    List<IssueContext> contexts, {
+    Set<String> protectedIssueIds = const {},
+  }) {
+    final protected = <String>{
+      for (final c in contexts)
+        if (c.issue.isDaily) c.issue.idReadable.toUpperCase(),
+      for (final id in protectedIssueIds) id.trim().toUpperCase(),
+    };
 
     final byIssue = <String, List<TimeEstimate>>{};
     for (final e in estimates) {
@@ -229,7 +254,7 @@ class AiTimeEstimator {
     final result = <TimeEstimate>[];
 
     for (final entry in byIssue.entries) {
-      if (dailyIds.contains(entry.key)) {
+      if (protected.contains(entry.key.toUpperCase())) {
         result.addAll(entry.value.where((e) => e.minutes > 0));
         continue;
       }
@@ -283,21 +308,28 @@ class AiTimeEstimator {
     List<IssueContext> planContexts,
     PlanCalculationOptions calculationOptions,
   ) {
+    final options = calculationOptions.resolveMeetupFromHint();
     final jsonStr = _extractJson(raw);
     final map = jsonDecode(jsonStr) as Map<String, dynamic>;
     final estimatesRaw = map['estimates'] as List<dynamic>? ?? [];
     final estimates = estimatesRaw
         .map((e) => TimeEstimate.fromJson(e as Map<String, dynamic>))
         .where((e) => e.minutes > 0 && e.issueIdReadable.isNotEmpty)
-        .where((e) => !calculationOptions.isDayExcluded(e.date))
+        .where((e) => !options.isDayExcluded(e.date))
         .toList();
 
-    final consolidated = _consolidateEstimates(estimates, planContexts);
+    final protected = options.protectedDailyIssueIds;
+    final consolidated = _consolidateEstimates(
+      estimates,
+      planContexts,
+      protectedIssueIds: protected,
+    );
     final normalized = _normalizePerDay(
       consolidated,
       workingDays,
       minutesPerWorkDay,
       existingMinutesByDay,
+      protectedIssueIds: protected,
     );
 
     return AiEstimationResult(
@@ -307,13 +339,18 @@ class AiTimeEstimator {
     );
   }
 
-  /// Приводит сумму по каждому дню к [minutesPerWorkDay] (пропорционально).
+  /// Приводит сумму по каждому дню к [minutesPerWorkDay].
+  /// Митап/protected оставляем как есть, масштабируем остальное.
   static List<TimeEstimate> _normalizePerDay(
     List<TimeEstimate> estimates,
     List<DateTime> workingDays,
     int minutesPerWorkDay,
-    Map<String, int> existingMinutesByDay,
-  ) {
+    Map<String, int> existingMinutesByDay, {
+    Set<String> protectedIssueIds = const {},
+  }) {
+    final protected = {
+      for (final id in protectedIssueIds) id.trim().toUpperCase(),
+    };
     final byDay = <String, List<TimeEstimate>>{};
     for (final e in estimates) {
       final key = DateUtils.formatForQuery(e.date);
@@ -331,30 +368,73 @@ class AiTimeEstimator {
           (minutesPerWorkDay - existingOnDay).clamp(0, minutesPerWorkDay);
       if (targetNew == 0) continue;
 
-      final total = dayEstimates.fold<int>(0, (s, e) => s + e.minutes);
-      if (total == 0) continue;
-
-      var allocated = 0;
-      for (var i = 0; i < dayEstimates.length; i++) {
-        final e = dayEstimates[i];
-        int minutes;
-        if (i == dayEstimates.length - 1) {
-          minutes = targetNew - allocated;
+      final fixed = <TimeEstimate>[];
+      final flexible = <TimeEstimate>[];
+      for (final e in dayEstimates) {
+        if (protected.contains(e.issueIdReadable.toUpperCase())) {
+          fixed.add(e);
         } else {
-          minutes = (e.minutes * targetNew / total).round();
-          allocated += minutes;
+          flexible.add(e);
         }
-        if (minutes > 0) {
+      }
+
+      final fixedTotal = fixed.fold<int>(0, (s, e) => s + e.minutes);
+      if (fixedTotal >= targetNew) {
+        // День переполнен защищёнными — пропорционально ужимаем только их.
+        result.addAll(
+          _scaleGroup(fixed, day, targetNew),
+        );
+        continue;
+      }
+
+      for (final e in fixed) {
+        if (e.minutes > 0) {
           result.add(
             TimeEstimate(
               issueIdReadable: e.issueIdReadable,
               date: day,
-              minutes: minutes,
+              minutes: e.minutes,
               reasoning: e.reasoning,
               confidence: e.confidence,
             ),
           );
         }
+      }
+
+      final flexibleTarget = targetNew - fixedTotal;
+      if (flexible.isEmpty || flexibleTarget <= 0) continue;
+      result.addAll(_scaleGroup(flexible, day, flexibleTarget));
+    }
+    return result;
+  }
+
+  static List<TimeEstimate> _scaleGroup(
+    List<TimeEstimate> group,
+    DateTime day,
+    int target,
+  ) {
+    if (group.isEmpty || target <= 0) return const [];
+    final total = group.fold<int>(0, (s, e) => s + e.minutes);
+    if (total == 0) return const [];
+
+    final result = <TimeEstimate>[];
+    var allocated = 0;
+    for (var i = 0; i < group.length; i++) {
+      final e = group[i];
+      final minutes = i == group.length - 1
+          ? target - allocated
+          : (e.minutes * target / total).round();
+      allocated += minutes;
+      if (minutes > 0) {
+        result.add(
+          TimeEstimate(
+            issueIdReadable: e.issueIdReadable,
+            date: day,
+            minutes: minutes,
+            reasoning: e.reasoning,
+            confidence: e.confidence,
+          ),
+        );
       }
     }
     return result;

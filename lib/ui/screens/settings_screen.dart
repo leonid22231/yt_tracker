@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:youtrack_timer/agent/cursor_proxy.dart';
 import 'package:youtrack_timer/config/app_config.dart';
 import 'package:youtrack_timer/providers/app_state.dart';
 import 'package:youtrack_timer/providers/design_variant_provider.dart';
@@ -24,6 +25,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _urlCtrl = TextEditingController();
   final _ytTokenCtrl = TextEditingController();
   final _cursorCtrl = TextEditingController();
+  final _cursorProxyCtrl = TextEditingController();
   bool _useAi = true;
   bool _dryRun = true;
   bool _loaded = false;
@@ -33,6 +35,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _urlCtrl.dispose();
     _ytTokenCtrl.dispose();
     _cursorCtrl.dispose();
+    _cursorProxyCtrl.dispose();
     super.dispose();
   }
 
@@ -41,17 +44,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _urlCtrl.text = s.youTrackUrl;
     _ytTokenCtrl.text = s.youTrackToken;
     _cursorCtrl.text = s.cursorApiKey;
+    _cursorProxyCtrl.text = s.cursorProxy;
     _useAi = s.useAi;
     _dryRun = s.dryRun;
     _loaded = true;
   }
 
   Future<void> _testConnection() async {
-    final settings = AppSettings(
-      youTrackUrl: _urlCtrl.text.trim(),
-      youTrackToken: _ytTokenCtrl.text.trim(),
-      cursorApiKey: _cursorCtrl.text.trim(),
-    ).normalized();
+    final current = ref.read(settingsProvider).valueOrNull;
+    final settings = (current ??
+            AppSettings(
+              youTrackUrl: '',
+              youTrackToken: '',
+              cursorApiKey: '',
+            ))
+        .copyWith(
+          youTrackUrl: _urlCtrl.text.trim(),
+          youTrackToken: _ytTokenCtrl.text.trim(),
+          cursorApiKey: _cursorCtrl.text.trim(),
+          cursorProxy: _cursorProxyCtrl.text.trim(),
+        )
+        .normalized();
 
     if (!settings.hasYouTrack) {
       _showSnack('Укажите URL и токен YouTrack');
@@ -91,13 +104,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _save() async {
-    final updated = AppSettings(
-      youTrackUrl: _urlCtrl.text.trim(),
-      youTrackToken: _ytTokenCtrl.text.trim(),
-      cursorApiKey: _cursorCtrl.text.trim(),
-      useAi: _useAi,
-      dryRun: _dryRun,
-    ).normalized();
+    final current = ref.read(settingsProvider).valueOrNull;
+    if (current == null) return;
+
+    final proxyRaw = _cursorProxyCtrl.text.trim();
+    try {
+      CursorProxy.normalize(proxyRaw);
+    } on ArgumentError catch (e) {
+      _showSnack(e.message.toString(), isError: true);
+      return;
+    }
+
+    final updated = current
+        .copyWith(
+          youTrackUrl: _urlCtrl.text.trim(),
+          youTrackToken: _ytTokenCtrl.text.trim(),
+          cursorApiKey: _cursorCtrl.text.trim(),
+          cursorProxy: proxyRaw,
+          useAi: _useAi,
+          dryRun: _dryRun,
+        )
+        .normalized();
+
     await ref.read(settingsProvider.notifier).update(updated);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -179,6 +207,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     obscureText: true,
                     decoration: const InputDecoration(
                       labelText: 'CURSOR_API_KEY',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _cursorProxyCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'HTTP-прокси (опционально)',
+                      hintText: '127.0.0.1:7890',
+                      helperText:
+                          'host:port — только для Cursor API (Windows/CLI)',
                     ),
                   ),
                 ],

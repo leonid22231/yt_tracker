@@ -209,8 +209,16 @@ class HomeNotifier extends StateNotifier<HomeState> {
 
       CursorAgentClient? cursorClient;
       if (settings.useAi && settings.hasCursor) {
-        cursorClient = CursorAgentClient(apiKey: settings.cursorApiKey);
-        _log.info(LogCategory.cursor, 'Cursor Agent включён');
+        cursorClient = CursorAgentClient(
+          apiKey: settings.cursorApiKey,
+          proxy: settings.cursorProxy,
+        );
+        _log.info(
+          LogCategory.cursor,
+          settings.hasCursorProxy
+              ? 'Cursor Agent включён (прокси ${settings.cursorProxy})'
+              : 'Cursor Agent включён',
+        );
       } else if (settings.useAi) {
         _log.warn(LogCategory.cursor, 'CURSOR_API_KEY не задан — равномерное распределение');
       }
@@ -619,7 +627,10 @@ class HomeNotifier extends StateNotifier<HomeState> {
 
       CursorAgentClient? cursorClient;
       if (settings.useAi && settings.hasCursor) {
-        cursorClient = CursorAgentClient(apiKey: settings.cursorApiKey);
+        cursorClient = CursorAgentClient(
+          apiKey: settings.cursorApiKey,
+          proxy: settings.cursorProxy,
+        );
       } else {
         _log.warn(
           LogCategory.cursor,

@@ -561,7 +561,10 @@ class GitLabNotifier extends StateNotifier<GitLabState> {
           : 'AI-сводка за ${DateUtils.formatForQuery(day)}…',
     ));
 
-    final client = CursorAgentClient(apiKey: settings.cursorApiKey);
+    final client = CursorAgentClient(
+      apiKey: settings.cursorApiKey,
+      proxy: settings.cursorProxy,
+    );
     try {
       final summarizer = GitLabAiSummarizer(client);
       final text = day == null

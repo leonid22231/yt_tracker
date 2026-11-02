@@ -161,6 +161,10 @@ class PlanBuilderService {
 
     final snapshot = List<PlannedEntry>.from(entries);
     progress?.advance('Финализация плана (митап, лимиты)');
+    planIssues = await _ensureMeetupIssue(
+      planIssues,
+      calculationOptions,
+    );
     entries = _finalizeEntries(
       entries,
       planIssues,
@@ -220,7 +224,7 @@ class PlanBuilderService {
       progress: progress,
     );
     final excluded = excludedIssueIds;
-    final activeIssues =
+    var activeIssues =
         issues.where((i) => !excluded.contains(i.id)).toList();
     if (excluded.isNotEmpty) {
       log.info(
@@ -301,6 +305,10 @@ class PlanBuilderService {
     }
 
     progress?.advance('Финализация плана');
+    activeIssues = await _ensureMeetupIssue(
+      activeIssues,
+      calculationOptions,
+    );
     entries = _finalizeEntries(
       entries,
       activeIssues,
@@ -419,6 +427,10 @@ class PlanBuilderService {
 
     progress?.advance('Финализация плана (митап, лимиты)');
     final snapshot = List<PlannedEntry>.from(entries);
+    planIssues = await _ensureMeetupIssue(
+      planIssues,
+      calculationOptions,
+    );
     entries = _finalizeEntries(
       entries,
       planIssues,
@@ -567,10 +579,12 @@ class PlanBuilderService {
     List<YouTrackIssue> issues,
     List<TimeEstimate> estimates,
   ) {
-    final byReadable = {for (final i in issues) i.idReadable: i};
+    final byReadable = {
+      for (final i in issues) i.idReadable.toUpperCase(): i,
+    };
     return estimates
         .map((e) {
-          final issue = byReadable[e.issueIdReadable];
+          final issue = byReadable[e.issueIdReadable.toUpperCase()];
           if (issue == null) return null;
           return PlannedEntry(
             issue: issue,
@@ -582,6 +596,43 @@ class PlanBuilderService {
         })
         .whereType<PlannedEntry>()
         .toList();
+  }
+
+  /// Подтягивает задачу митапа из YouTrack, если её нет в списке плана.
+  Future<List<YouTrackIssue>> _ensureMeetupIssue(
+    List<YouTrackIssue> issues,
+    PlanCalculationOptions calculationOptions,
+  ) async {
+    final meetup = calculationOptions.resolveMeetupFromHint().meetup;
+    if (!meetup.isConfigured) return issues;
+
+    final target = meetup.issueIdReadable.trim().toUpperCase();
+    final already = issues.any(
+      (i) => i.idReadable.toUpperCase() == target,
+    );
+    if (already) return issues;
+
+    try {
+      final fetched = await _yt.tryFetchIssueByReadable(target);
+      if (fetched == null) {
+        AppLog.instance.warn(
+          LogCategory.plan,
+          'Митап $target: задача не найдена в YouTrack',
+        );
+        return issues;
+      }
+      AppLog.instance.info(
+        LogCategory.plan,
+        'Митап: добавлена задача ${fetched.idReadable} в план',
+      );
+      return [...issues, fetched];
+    } catch (e) {
+      AppLog.instance.warn(
+        LogCategory.plan,
+        'Митап $target: не удалось загрузить задачу ($e)',
+      );
+      return issues;
+    }
   }
 
   List<PlannedEntry> _entriesFromEven(
@@ -618,11 +669,21 @@ class PlanBuilderService {
     int minutesPerDay,
     PlanCalculationOptions calculationOptions,
   ) {
-    var result = calculationOptions.filterExcludedDays(entries);
+    final options = calculationOptions.resolveMeetupFromHint();
+    if (options.meetup.isConfigured &&
+        !calculationOptions.meetup.isConfigured) {
+      AppLog.instance.info(
+        LogCategory.plan,
+        'Митап из подсказки AI: ${options.meetup.issueIdReadable} '
+        '${options.meetup.minutesPerDay} мин/день',
+      );
+    }
+
+    var result = options.filterExcludedDays(entries);
     result = MeetupAllocator.apply(
       entries: result,
-      meetup: calculationOptions.meetup,
-      options: calculationOptions,
+      meetup: options.meetup,
+      options: options,
       periodStart: start,
       periodEnd: end,
       issues: issues,
@@ -635,17 +696,17 @@ class PlanBuilderService {
       end,
       contexts,
       minutesPerDay,
-      calculationOptions,
+      options,
     );
     result = DayPlanCapper.cap(
       entries: result,
       existingContexts: contexts,
       minutesPerDay: minutesPerDay,
-      options: calculationOptions,
+      options: options,
       periodStart: start,
       periodEnd: end,
     );
-    return calculationOptions.filterExcludedDays(result);
+    return options.filterExcludedDays(result);
   }
 
   /// Дни ниже нормы: добиваем из любых задач плана (созданы не позже этого дня).
